@@ -1,0 +1,37 @@
+import { Routes, Route, Navigate } from 'react-router-dom'
+import Layout from './components/Layout'
+import Login from './pages/Login'
+import Dashboard from './pages/Dashboard'
+import Providers from './pages/Providers'
+import Models from './pages/Models'
+import Routing from './pages/Routing'
+import Logs from './pages/Logs'
+
+function ProtectedRoute({ children }: { children: React.ReactNode }) {
+  const token = localStorage.getItem('admin_jwt')
+  if (!token) return <Navigate to="/login" replace />
+  return <>{children}</>
+}
+
+export default function App() {
+  return (
+    <Routes>
+      <Route path="/login" element={<Login />} />
+      <Route
+        path="/"
+        element={
+          <ProtectedRoute>
+            <Layout />
+          </ProtectedRoute>
+        }
+      >
+        <Route index element={<Dashboard />} />
+        <Route path="providers" element={<Providers />} />
+        <Route path="models" element={<Models />} />
+        <Route path="routing" element={<Routing />} />
+        <Route path="logs" element={<Logs />} />
+      </Route>
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  )
+}
