@@ -4,6 +4,7 @@ export interface Provider {
   id: number
   name: string
   base_url: string
+  /** 仅用于请求体；后端 Provider.APIKey 标记 json:"-"，响应中不会返回。 */
   api_key?: string
   protocol: string
   enabled: boolean

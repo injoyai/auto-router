@@ -13,7 +13,7 @@ apiClient.interceptors.request.use((config) => {
 apiClient.interceptors.response.use(
   (resp) => resp,
   (err) => {
-    if (err.response?.status === 401) {
+    if (err.response?.status === 401 && !err.config?.url?.includes('/admin/login')) {
       localStorage.removeItem('admin_jwt')
       window.location.href = '/login'
     }
