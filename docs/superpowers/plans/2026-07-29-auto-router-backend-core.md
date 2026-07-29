@@ -219,7 +219,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"gorm.io/gorm"
 )
 
 func newTestStore(t *testing.T) *Store {
@@ -236,17 +235,13 @@ func TestOpenAutoMigrates(t *testing.T) {
 	err := s.DB.AutoMigrate(&Provider{}, &Model{}, &RoutingConfig{}, &Session{}, &RequestLog{}, &Setting{}).Error
 	assert.NoError(t, err)
 
-	// Tables exist: query each
-	assert.NoError(t, s.DB.First(&Provider{}).Error) // empty but table exists -> gorm returns ErrRecordNotFound, not table-missing
-	// Use raw check instead:
+	// Tables exist and are queryable: count rows in each (empty = 0).
 	var count int64
 	for _, tbl := range []string{"providers", "models", "routing_configs", "sessions", "request_logs", "settings"} {
 		s.DB.Table(tbl).Count(&count)
 		assert.Equal(t, int64(0), count, "table %s should exist and be empty", tbl)
 	}
 }
-
-var _ = gorm.ErrRecordNotFound
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
