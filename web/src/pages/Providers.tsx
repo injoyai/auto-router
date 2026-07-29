@@ -23,10 +23,12 @@ export default function Providers() {
   const createMut = useMutation({
     mutationFn: createProvider,
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['providers'] }); message.success('创建成功') },
+    onError: () => { message.error('创建失败') },
   })
   const updateMut = useMutation({
     mutationFn: (p: { id: number; data: Partial<ProviderType> }) => updateProvider(p.id, p.data),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['providers'] }); message.success('更新成功') },
+    onError: () => { message.error('更新失败') },
   })
   const deleteMut = useMutation({
     mutationFn: deleteProvider,
@@ -72,6 +74,7 @@ export default function Providers() {
   const handleTest = async (id: number) => {
     setTestLoading(true)
     setTestOpen(true)
+    setTestResult(null)
     try {
       const r = await testProvider(id)
       setTestResult(r)
@@ -147,7 +150,6 @@ export default function Providers() {
         open={testOpen}
         footer={<Button onClick={() => setTestOpen(false)}>关闭</Button>}
         onCancel={() => setTestOpen(false)}
-        confirmLoading={testLoading}
       >
         {testLoading && <p>正在测试...</p>}
         {testResult && (
