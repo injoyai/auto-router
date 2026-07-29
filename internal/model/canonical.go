@@ -48,6 +48,15 @@ func (r *ChatRequest) LastUserMessage() string {
 	return ""
 }
 
+// IsRouteRequested reports whether the client wants auto-routing (no explicit model).
+// Sentinel values "", "auto", "route" trigger routing; any other model name is an
+// explicit override. Defined here (in package model) because Go does not allow
+// defining methods on imported types from another package.
+func (r *ChatRequest) IsRouteRequested() bool {
+	m := r.Model
+	return m == "" || m == "auto" || m == "route"
+}
+
 // ChatResponse is the canonical non-streaming response.
 type ChatResponse struct {
 	Model   string   `json:"model"`
