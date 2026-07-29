@@ -31,10 +31,12 @@ func BuildUpstreamRequest(req *model.ChatRequest) (map[string]any, error) {
 	var msgs []map[string]any
 	for _, m := range req.Messages {
 		if m.Role == "system" {
-			if _, exists := body["system"]; !exists {
-				body["system"] = m.Content
+			if existing, exists := body["system"]; exists {
+				body["system"] = existing.(string) + "\n" + m.Content
 				continue
 			}
+			body["system"] = m.Content
+			continue
 		}
 		msgs = append(msgs, canonicalMessageToClaude(m))
 	}
@@ -81,7 +83,7 @@ func canonicalMessageToClaude(m model.Message) map[string]any {
 			blocks = append(blocks, map[string]any{"type": "text", "text": m.Content})
 		}
 		for _, tc := range m.ToolCalls {
-			var input any
+			input := map[string]any{}
 			if tc.Function.Arguments != "" {
 				_ = json.Unmarshal([]byte(tc.Function.Arguments), &input)
 			}

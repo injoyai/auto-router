@@ -43,3 +43,20 @@ func TestBuildUpstreamRequestCrossProtocolNoLeak(t *testing.T) {
 	_, hasSystem := body["system"]
 	assert.False(t, hasSystem, "system field must not leak from Claude client raw")
 }
+
+func TestBuildUpstreamRequestToolChoicePassthrough(t *testing.T) {
+	req := &model.ChatRequest{
+		Model:    "gpt-4o",
+		Messages: []model.Message{{Role: "user", Content: "hi"}},
+		Raw: map[string]any{
+			"tool_choice":         "auto",
+			"stream_options":      map[string]any{"include_usage": true},
+			"parallel_tool_calls": true,
+		},
+	}
+	body, err := BuildUpstreamRequest(req)
+	assert.NoError(t, err)
+	assert.Equal(t, "auto", body["tool_choice"])
+	assert.NotNil(t, body["stream_options"])
+	assert.Equal(t, true, body["parallel_tool_calls"])
+}

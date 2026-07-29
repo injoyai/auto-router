@@ -13,6 +13,7 @@ var passthroughKeys = []string{
 	"temperature", "top_p", "max_tokens", "max_completion_tokens",
 	"stop", "presence_penalty", "frequency_penalty", "seed",
 	"n", "logprobs", "top_logprobs", "response_format",
+	"tool_choice", "parallel_tool_calls", "stream_options", "logit_bias",
 	"user",
 }
 
