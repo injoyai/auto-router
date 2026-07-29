@@ -37,3 +37,11 @@ func (s *Store) UpdateProvider(p *Provider) error {
 func (s *Store) DeleteProvider(id uint) error {
 	return s.DB.Delete(&Provider{}, id).Error
 }
+
+// CountModelsByProvider returns the number of models referencing the provider.
+// Used by I10 to reject deletion of a provider that still has models.
+func (s *Store) CountModelsByProvider(providerID uint) (int64, error) {
+	var n int64
+	err := s.DB.Model(&Model{}).Where("provider_id = ?", providerID).Count(&n).Error
+	return n, err
+}

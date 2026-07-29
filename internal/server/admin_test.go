@@ -9,6 +9,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
+	"auto-router/internal/store"
 )
 
 func TestAdminLoginAndProviders(t *testing.T) {
@@ -93,4 +95,58 @@ func TestTestProviderOkLogic(t *testing.T) {
 	assert.EqualValues(t, http.StatusUnauthorized, res["status"])
 	assert.Equal(t, "HTTP 401", res["error"])
 	assert.NotContains(t, w.Body.String(), "internal body must not leak")
+}
+
+// TestDeleteReferencedRejected (I10) verifies that deleting a provider with
+// models, the judge model, and the default model all return 409 "in use",
+// while an unreferenced model/provider can be deleted.
+func TestDeleteReferencedRejected(t *testing.T) {
+	app := newTestApp(t, "http://example.com")
+	tok := adminToken(t, app)
+
+	// newTestApp created provider 1 with judge model (id=1) and target model
+	// (id=2, the default). Both are referenced; provider 1 has models.
+	// Delete provider 1 -> 409 (has models)
+	req := httptest.NewRequest(http.MethodDelete, "/admin/providers/1", nil)
+	req.Header.Set("Authorization", "Bearer "+tok)
+	w := httptest.NewRecorder()
+	app.Router.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusConflict, w.Code)
+	assert.Contains(t, w.Body.String(), "in use")
+
+	// Delete judge model (id=1) -> 409 (is_judge)
+	req = httptest.NewRequest(http.MethodDelete, "/admin/models/1", nil)
+	req.Header.Set("Authorization", "Bearer "+tok)
+	w = httptest.NewRecorder()
+	app.Router.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusConflict, w.Code)
+
+	// Delete default model (id=2) -> 409 (default_model_id)
+	req = httptest.NewRequest(http.MethodDelete, "/admin/models/2", nil)
+	req.Header.Set("Authorization", "Bearer "+tok)
+	w = httptest.NewRecorder()
+	app.Router.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusConflict, w.Code)
+
+	// Create an unreferenced model + provider and delete them successfully.
+	prov := &store.Provider{Name: "p2", BaseURL: "http://x", APIKey: store.Encrypt(app.CryptoKey, "k"), Protocol: "openai", Enabled: true}
+	if err := app.Store.CreateProvider(prov); err != nil {
+		t.Fatal(err)
+	}
+	m := &store.Model{Name: "free", DisplayName: "Free", ProviderID: prov.ID, Enabled: true}
+	if err := app.Store.CreateModel(m); err != nil {
+		t.Fatal(err)
+	}
+	// Delete the unreferenced model -> 200
+	req = httptest.NewRequest(http.MethodDelete, "/admin/models/3", nil)
+	req.Header.Set("Authorization", "Bearer "+tok)
+	w = httptest.NewRecorder()
+	app.Router.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusOK, w.Code)
+	// Now the provider has no models -> delete -> 200
+	req = httptest.NewRequest(http.MethodDelete, "/admin/providers/2", nil)
+	req.Header.Set("Authorization", "Bearer "+tok)
+	w = httptest.NewRecorder()
+	app.Router.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusOK, w.Code)
 }

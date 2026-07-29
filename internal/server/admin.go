@@ -1,6 +1,7 @@
 package server
 
 import (
+	"crypto/subtle"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -22,7 +23,8 @@ func (a *App) handleAdminLogin(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	if body.Token == "" || body.Token != a.AdminToken {
+	// I9: compare the admin token in constant time to avoid timing side channels.
+	if body.Token == "" || subtle.ConstantTimeCompare([]byte(body.Token), []byte(a.AdminToken)) != 1 {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
 		return
 	}
@@ -89,6 +91,16 @@ func (a *App) handleUpdateProvider(c *gin.Context) {
 
 func (a *App) handleDeleteProvider(c *gin.Context) {
 	id, _ := strconv.Atoi(c.Param("id"))
+	// I10: reject deletion if any models still reference this provider.
+	n, err := a.Store.CountModelsByProvider(uint(id))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if n > 0 {
+		c.JSON(http.StatusConflict, gin.H{"error": "in use"})
+		return
+	}
 	if err := a.Store.DeleteProvider(uint(id)); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -168,6 +180,17 @@ func (a *App) handleUpdateModel(c *gin.Context) {
 
 func (a *App) handleDeleteModel(c *gin.Context) {
 	id, _ := strconv.Atoi(c.Param("id"))
+	// I10: reject deletion if the model is the judge or is referenced by
+	// routing_config.judge_model_id / default_model_id.
+	refs, err := a.Store.IsModelReferenced(uint(id))
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
+		return
+	}
+	if refs {
+		c.JSON(http.StatusConflict, gin.H{"error": "in use"})
+		return
+	}
 	if err := a.Store.DeleteModel(uint(id)); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

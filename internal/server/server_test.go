@@ -25,7 +25,9 @@ func TestSessionCleanup(t *testing.T) {
 	app := newTestApp(t, "http://example.com")
 	// Pin the in-memory SQLite to a single connection so the cleanup goroutine
 	// shares the same :memory: database (each :memory: connection otherwise
-	// gets its own private, empty database).
+	// gets its own private, empty database). This is still required even with
+	// the WAL/busy_timeout PRAGMAs from Open() — WAL does not apply to
+	// :memory: databases, which remain per-connection.
 	sqlDB, err := app.Store.DB.DB()
 	assert.NoError(t, err)
 	sqlDB.SetMaxOpenConns(1)

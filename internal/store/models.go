@@ -56,6 +56,30 @@ func (s *Store) DeleteModel(id uint) error {
 	return s.DB.Delete(&Model{}, id).Error
 }
 
+// IsModelReferenced reports whether the model is the active judge
+// (is_judge=true) or is referenced by routing_config.judge_model_id /
+// default_model_id. Used by I10 to reject deletion of a model still in use.
+func (s *Store) IsModelReferenced(id uint) (bool, error) {
+	var m Model
+	if err := s.DB.First(&m, id).Error; err != nil {
+		return false, err
+	}
+	if m.IsJudge {
+		return true, nil
+	}
+	var rc RoutingConfig
+	if err := s.DB.First(&rc, 1).Error; err != nil {
+		return false, err
+	}
+	if rc.JudgeModelID != nil && *rc.JudgeModelID == id {
+		return true, nil
+	}
+	if rc.DefaultModelID != nil && *rc.DefaultModelID == id {
+		return true, nil
+	}
+	return false, nil
+}
+
 // SetJudgeModel marks the given model as the sole judge, unsetting others.
 func (s *Store) SetJudgeModel(id uint) error {
 	return s.DB.Transaction(func(tx *gorm.DB) error {
