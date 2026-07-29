@@ -1,6 +1,7 @@
 package server
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -108,7 +109,13 @@ func (a *App) handleTestProvider(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"ok": false, "status": status, "error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"ok": true, "status": status})
+	// I6: ok is true only for 2xx responses; any other status is reported with
+	// a generic "HTTP <status>" error.
+	if status >= 200 && status < 300 {
+		c.JSON(http.StatusOK, gin.H{"ok": true, "status": status})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"ok": false, "status": status, "error": fmt.Sprintf("HTTP %d", status)})
 }
 
 // ---- Models ----

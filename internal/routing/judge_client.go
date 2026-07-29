@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	"auto-router/internal/model"
 	"auto-router/internal/store"
 	"auto-router/internal/upstream"
 )
@@ -25,6 +24,10 @@ func NewJudgeClient(d *upstream.Dispatcher, baseURL, apiKey string) *defaultJudg
 	return &defaultJudgeClient{disp: d, baseURL: baseURL, apiKey: apiKey}
 }
 
+// Judge calls the judge model with a 10s timeout. I5: the timeout is enforced
+// via context.WithTimeout passed to Dispatcher.CallCtx, which builds the HTTP
+// request with http.NewRequestWithContext — so the in-flight call is cancelled
+// on expiry (no goroutine leak, no dead select branch).
 func (j *defaultJudgeClient) Judge(judgeModel *store.Model, candidates []store.Model, userText string) (string, error) {
 	msgs := BuildJudgeMessages(candidates, userText)
 	body := map[string]any{
@@ -32,30 +35,14 @@ func (j *defaultJudgeClient) Judge(judgeModel *store.Model, candidates []store.M
 		"messages": msgs,
 		"stream":   false,
 	}
-	// Use a short timeout via a goroutine + select.
-	done := make(chan struct {
-		resp *model.ChatResponse
-		err  error
-	}, 1)
-	go func() {
-		r, err := j.disp.Call(j.baseURL, j.apiKey, body)
-		done <- struct {
-			resp *model.ChatResponse
-			err  error
-		}{r, err}
-	}()
-	select {
-	case res := <-done:
-		if res.err != nil {
-			return "", res.err
-		}
-		if len(res.resp.Choices) == 0 {
-			return "", fmt.Errorf("judge returned no choices")
-		}
-		return res.resp.Choices[0].Message.Content, nil
-	case <-time.After(10 * time.Second):
-		return "", fmt.Errorf("judge timeout")
-	case <-context.Background().Done():
-		return "", context.Background().Err()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	resp, err := j.disp.CallCtx(ctx, j.baseURL, j.apiKey, body)
+	if err != nil {
+		return "", err
 	}
+	if len(resp.Choices) == 0 {
+		return "", fmt.Errorf("judge returned no choices")
+	}
+	return resp.Choices[0].Message.Content, nil
 }

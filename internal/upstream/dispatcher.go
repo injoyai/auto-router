@@ -3,9 +3,11 @@ package upstream
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -24,11 +26,22 @@ func New() *Dispatcher {
 
 // Call performs a non-streaming upstream request and returns the parsed canonical response.
 func (d *Dispatcher) Call(baseURL, apiKey string, body map[string]any) (*model.ChatResponse, error) {
+	return d.CallCtx(context.Background(), baseURL, apiKey, body)
+}
+
+// CallCtx is the context-aware variant of Call. I5: the judge client passes a
+// 10s-timeout context so the in-flight HTTP request is cancelled on timeout
+// (no goroutine leak). http.NewRequestWithContext ties the request lifetime
+// to ctx, so Client.Do returns promptly when ctx expires.
+func (d *Dispatcher) CallCtx(ctx context.Context, baseURL, apiKey string, body map[string]any) (*model.ChatResponse, error) {
 	b, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
-	req, _ := http.NewRequest(http.MethodPost, baseURL+"/chat/completions", bytes.NewReader(b))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, baseURL+"/chat/completions", bytes.NewReader(b))
+	if err != nil {
+		return nil, err
+	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+apiKey)
 	resp, err := d.Client.Do(req)
@@ -41,7 +54,11 @@ func (d *Dispatcher) Call(baseURL, apiKey string, body map[string]any) (*model.C
 		return nil, err
 	}
 	if resp.StatusCode >= 400 {
-		return nil, fmt.Errorf("upstream %d: %s", resp.StatusCode, string(raw))
+		// I7: log the upstream body internally but return a generic,
+		// non-leaking error to the client (the gateway records err.Error()
+		// in request_logs.error).
+		log.Printf("[WARN] upstream %s returned %d: %s", req.URL.String(), resp.StatusCode, string(raw))
+		return nil, fmt.Errorf("upstream returned %d", resp.StatusCode)
 	}
 	var m map[string]any
 	if err := json.Unmarshal(raw, &m); err != nil {
@@ -73,8 +90,10 @@ func (d *Dispatcher) CallStream(baseURL, apiKey string, body map[string]any, onC
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode >= 400 {
+		// I7: log body internally, return generic error.
 		raw, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("upstream %d: %s", resp.StatusCode, string(raw))
+		log.Printf("[WARN] upstream %s returned %d: %s", req.URL.String(), resp.StatusCode, string(raw))
+		return fmt.Errorf("upstream returned %d", resp.StatusCode)
 	}
 	scanner := bufio.NewScanner(resp.Body)
 	scanner.Buffer(make([]byte, 1024), 4*1024*1024)
