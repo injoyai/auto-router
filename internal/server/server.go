@@ -2,6 +2,7 @@ package server
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -101,4 +102,17 @@ func (l *lazyJudge) Judge(judgeModel *store.Model, candidates []store.Model, use
 	}
 	apiKey, _ := store.Decrypt(l.key, prov.APIKey)
 	return routing.NewJudgeClient(l.disp, prov.BaseURL, apiKey).Judge(judgeModel, candidates, userText)
+}
+
+// StartSessionCleanup launches a goroutine that periodically deletes expired
+// sessions from the store. It is NOT auto-started by NewApp so tests can drive
+// it explicitly; main.go starts it for the real server.
+func StartSessionCleanup(st *store.Store, interval time.Duration) {
+	go func() {
+		t := time.NewTicker(interval)
+		defer t.Stop()
+		for range t.C {
+			_, _ = st.CleanExpiredSessions()
+		}
+	}()
 }
