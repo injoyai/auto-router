@@ -73,7 +73,7 @@ func TestEncodeResponseToClientToolUse(t *testing.T) {
 	resp := &model.ChatResponse{
 		Model: "claude-3-5-sonnet-20241022",
 		Choices: []model.Choice{{
-			Index:   0,
+			Index: 0,
 			Message: model.Message{Role: "assistant", Content: "Let me check.", ToolCalls: []model.ToolCall{{
 				ID:   "tu_1",
 				Type: "function",
@@ -85,7 +85,8 @@ func TestEncodeResponseToClientToolUse(t *testing.T) {
 			FinishReason: "tool_calls",
 		}},
 	}
-	b, _ := EncodeResponseToClient(resp)
+	b, err := EncodeResponseToClient(resp)
+	assert.NoError(t, err)
 	var m map[string]any
 	_ = json.Unmarshal(b, &m)
 	content := m["content"].([]any)

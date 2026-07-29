@@ -49,7 +49,7 @@ func ParseResponse(raw map[string]any) (*model.ChatResponse, error) {
 			msg.Content += block.Text
 		case "tool_use":
 			args := "{}"
-			if len(block.Input) > 0 {
+			if len(block.Input) > 0 && string(block.Input) != "null" {
 				args = string(block.Input)
 			}
 			tc := model.ToolCall{
