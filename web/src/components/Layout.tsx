@@ -32,7 +32,7 @@ export default function Layout() {
 
   return (
     <AntLayout style={{ minHeight: '100vh' }}>
-      <Sider width={220} theme="light" style={{ borderRight: '1px solid #f0f0f0' }}>
+      <Sider width={220} theme="light" style={{ borderRight: '1px solid #f0f0f0', position: 'relative' }}>
         <div style={{ padding: '16px', fontWeight: 700, fontSize: 16, color: '#08979c' }}>
           Auto Router
         </div>
