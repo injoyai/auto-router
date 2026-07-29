@@ -1,7 +1,9 @@
 package server
 
 import (
+	"io/fs"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -48,6 +50,20 @@ func NewApp(cfg Config, st *store.Store, cryptoKey []byte, gatewayToken, adminTo
 	r := gin.New()
 	r.Use(gin.Recovery())
 	r.GET("/health", func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"status": "ok"}) })
+
+	// Dev mode: permissive CORS so the Vite dev server can call the backend.
+	if cfg.ListenAddr == ":8080" {
+		r.Use(func(c *gin.Context) {
+			c.Header("Access-Control-Allow-Origin", "*")
+			c.Header("Access-Control-Allow-Headers", "Authorization, Content-Type")
+			c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+			if c.Request.Method == "OPTIONS" {
+				c.AbortWithStatus(http.StatusNoContent)
+				return
+			}
+			c.Next()
+		})
+	}
 
 	app := &App{
 		Router:       r,
@@ -116,4 +132,24 @@ func StartSessionCleanup(st *store.Store, interval time.Duration) {
 			_, _ = st.CleanExpiredSessions()
 		}
 	}()
+}
+
+// ServeSPA registers a NoRoute handler to serve the embedded React SPA.
+// webFS is the embedded filesystem from //go:embed.
+func (a *App) ServeSPA(webFS fs.FS) {
+	a.Router.NoRoute(func(c *gin.Context) {
+		path := c.Request.URL.Path
+		if strings.HasPrefix(path, "/v1") || strings.HasPrefix(path, "/admin") || path == "/health" {
+			c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
+			return
+		}
+		// Try serving the exact file; fall back to index.html for SPA routing.
+		f, err := webFS.Open(strings.TrimPrefix(path, "/"))
+		if err != nil {
+			c.FileFromFS("/", http.FS(webFS))
+			return
+		}
+		f.Close()
+		c.FileFromFS(path, http.FS(webFS))
+	})
 }
