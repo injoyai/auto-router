@@ -1,0 +1,54 @@
+package openai
+
+import (
+	"bufio"
+	"strings"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+
+	"auto-router/internal/model"
+)
+
+func TestScanChunks(t *testing.T) {
+	sse := "data: {\"model\":\"gpt-4\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"hel\"}}]}\n\n" +
+		"data: {\"model\":\"gpt-4\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"lo\"},\"finish_reason\":\"stop\"}]}\n\n" +
+		"data: [DONE]\n\n"
+
+	scanner := bufio.NewScanner(strings.NewReader(sse))
+	scanner.Buffer(make([]byte, 1024), 1024*1024)
+
+	var contents []string
+	var finish string
+	for scanner.Scan() {
+		line := scanner.Text()
+		ch, done, err := ParseSSELine(line)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if done {
+			break
+		}
+		if ch == nil {
+			continue
+		}
+		if len(ch.Choices) > 0 {
+			contents = append(contents, ch.Choices[0].Delta.Content)
+			if ch.Choices[0].FinishReason != "" {
+				finish = ch.Choices[0].FinishReason
+			}
+		}
+	}
+	assert.Equal(t, []string{"hel", "lo"}, contents)
+	assert.Equal(t, "stop", finish)
+}
+
+func TestEncodeChunk(t *testing.T) {
+	ch := &model.Chunk{
+		Model: "gpt-4",
+		Choices: []model.ChunkChoice{{Index: 0, Delta: model.Delta{Content: "x"}}},
+	}
+	b, err := EncodeChunk(ch)
+	assert.NoError(t, err)
+	assert.Equal(t, `data: {"model":"gpt-4","choices":[{"index":0,"delta":{"content":"x"}}]}`, string(b))
+}
