@@ -58,3 +58,27 @@ func TestGatewayNonStreamRoute(t *testing.T) {
 	assert.Equal(t, int64(1), total)
 	assert.NotEmpty(t, logs)
 }
+
+// TestGatewayRequestedVsRoutedModel verifies B1: the request log stores the
+// client's original model (e.g. "auto") in RequestedModel and the chosen model
+// in RoutedModel, even though req.Model is overwritten before dispatch.
+func TestGatewayRequestedVsRoutedModel(t *testing.T) {
+	upstreamURL := startMockUpstream(t)
+	app := newTestApp(t, upstreamURL)
+	r := app.Router
+
+	body := `{"model":"auto","messages":[{"role":"user","content":"hi"}]}`
+	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", bytes.NewBufferString(body))
+	req.Header.Set("Authorization", "Bearer "+app.GatewayToken)
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	logs, _, _ := app.Store.ListLogs(1, 10, "", "")
+	if assert.Len(t, logs, 1) {
+		assert.Equal(t, "auto", logs[0].RequestedModel)
+		assert.Equal(t, "gpt-4o", logs[0].RoutedModel)
+		assert.NotEqual(t, logs[0].RequestedModel, logs[0].RoutedModel)
+	}
+}

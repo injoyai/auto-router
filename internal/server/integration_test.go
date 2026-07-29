@@ -107,3 +107,33 @@ func TestEndToEndStreaming(t *testing.T) {
 	assert.Contains(t, w.Body.String(), "data: ")
 	assert.Contains(t, w.Body.String(), "[DONE]")
 }
+
+// TestEndToEndDirectiveSwitchOffNotStripped verifies B2: when
+// enable_next_model_directive is false, a response containing the directive is
+// NOT stripped from the visible body and NOT persisted to the session.
+func TestEndToEndDirectiveSwitchOffNotStripped(t *testing.T) {
+	url := startDirectiveUpstream(t)
+	app := newTestApp(t, url)
+	// Disable the next-model directive switch.
+	rc, _ := app.Store.GetRoutingConfig()
+	rc.EnableNextModelDirective = false
+	if err := app.Store.UpdateRoutingConfig(rc); err != nil {
+		t.Fatal(err)
+	}
+
+	body := `{"model":"auto","messages":[{"role":"user","content":"hi"}]}`
+	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", bytes.NewBufferString(body))
+	req.Header.Set("Authorization", "Bearer "+app.GatewayToken)
+	req.Header.Set("X-Session-Id", "sess-off")
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	app.Router.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusOK, w.Code)
+	// directive NOT stripped from visible response (JSON-escapes < as \u003c,
+	// so we assert on the directive text which survives escaping)
+	assert.Contains(t, w.Body.String(), "next_model")
+	// session NOT persisted
+	sess, err := app.Store.GetSession("sess-off")
+	assert.Error(t, err)
+	assert.Nil(t, sess)
+}
