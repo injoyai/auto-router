@@ -96,3 +96,16 @@ func (d *Dispatcher) CallStream(baseURL, apiKey string, body map[string]any) ([]
 	out = append(out, nil) // ensure terminator
 	return out, nil
 }
+
+// TestConnect issues a GET {baseURL}/models to verify connectivity + credentials.
+// Returns the upstream HTTP status code (and any transport-level error).
+func (d *Dispatcher) TestConnect(baseURL, apiKey string) (int, error) {
+	req, _ := http.NewRequest(http.MethodGet, baseURL+"/models", nil)
+	req.Header.Set("Authorization", "Bearer "+apiKey)
+	resp, err := d.Client.Do(req)
+	if err != nil {
+		return 0, err
+	}
+	defer resp.Body.Close()
+	return resp.StatusCode, nil
+}
