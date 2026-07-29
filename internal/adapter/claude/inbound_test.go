@@ -5,8 +5,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-
-	"auto-router/internal/model"
 )
 
 func TestParseRequestSimpleString(t *testing.T) {
@@ -36,18 +34,28 @@ func TestParseRequestContentBlocksMixed(t *testing.T) {
 
 	req, err := ParseRequest(raw)
 	assert.NoError(t, err)
-	// tool_result → tool message, text → user message
-	assert.GreaterOrEqual(t, len(req.Messages), 2)
-	var toolMsg *model.Message
-	for i := range req.Messages {
-		if req.Messages[i].Role == "tool" {
-			toolMsg = &req.Messages[i]
-			break
-		}
-	}
-	assert.NotNil(t, toolMsg, "should have a tool role message from tool_result block")
-	assert.Equal(t, "tu_1", toolMsg.ToolCallID)
-	assert.Equal(t, "Sunny", toolMsg.Content)
+	// tool_result → tool message, text → user message (deterministic: tool first, then user)
+	assert.Len(t, req.Messages, 2)
+	assert.Equal(t, "tool", req.Messages[0].Role)
+	assert.Equal(t, "tu_1", req.Messages[0].ToolCallID)
+	assert.Equal(t, "Sunny", req.Messages[0].Content)
+	assert.Equal(t, "user", req.Messages[1].Role)
+	assert.Equal(t, "Thanks", req.Messages[1].Content)
+}
+
+func TestParseRequestToolResultArrayContent(t *testing.T) {
+	body := `{"model":"claude-3-5-sonnet-20241022","max_tokens":1024,"messages":[
+		{"role":"user","content":[{"type":"tool_result","tool_use_id":"tu_1","content":[{"type":"text","text":"line1"},{"type":"text","text":"line2"}]}]}
+	]}`
+	var raw map[string]any
+	_ = json.Unmarshal([]byte(body), &raw)
+
+	req, err := ParseRequest(raw)
+	assert.NoError(t, err)
+	assert.Len(t, req.Messages, 1)
+	assert.Equal(t, "tool", req.Messages[0].Role)
+	assert.Equal(t, "tu_1", req.Messages[0].ToolCallID)
+	assert.Equal(t, "line1\nline2", req.Messages[0].Content)
 }
 
 func TestParseRequestAssistantToolUse(t *testing.T) {
@@ -104,4 +112,8 @@ func TestParseRequestTools(t *testing.T) {
 	assert.Equal(t, "function", req.Tools[0].Type)
 	assert.Equal(t, "get_weather", req.Tools[0].Function.Name)
 	assert.Equal(t, "Get weather", req.Tools[0].Function.Description)
+	// Verify input_schema → Parameters passthrough
+	params, ok := req.Tools[0].Function.Parameters.(map[string]any)
+	assert.True(t, ok, "Parameters should be a map")
+	assert.Equal(t, "object", params["type"])
 }
