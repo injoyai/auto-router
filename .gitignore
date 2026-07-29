@@ -17,3 +17,7 @@ auto-router.exe
 .idea/
 .vscode/
 *.swp
+
+# Frontend
+node_modules/
+web/dist/
