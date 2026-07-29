@@ -53,12 +53,15 @@ func (d *Dispatcher) Call(baseURL, apiKey string, body map[string]any) (*model.C
 // StreamChunk is one parsed chunk; nil sentinel marks [DONE].
 type StreamChunk = *model.Chunk
 
-// CallStream performs a streaming upstream request and returns parsed chunks.
-// The final element is nil to signal [DONE].
-func (d *Dispatcher) CallStream(baseURL, apiKey string, body map[string]any) ([]StreamChunk, error) {
+// CallStream performs a streaming upstream request and invokes onChunk for
+// each parsed SSE chunk as it arrives (real streaming, not buffered). onChunk
+// is called with a nil chunk to signal the upstream [DONE] sentinel (and is
+// also synthesized once if the upstream closes without one). If onChunk
+// returns a non-nil error the stream is aborted and that error is returned.
+func (d *Dispatcher) CallStream(baseURL, apiKey string, body map[string]any, onChunk func(StreamChunk) error) error {
 	b, err := json.Marshal(body)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	req, _ := http.NewRequest(http.MethodPost, baseURL+"/chat/completions", bytes.NewReader(b))
 	req.Header.Set("Content-Type", "application/json")
@@ -66,35 +69,46 @@ func (d *Dispatcher) CallStream(baseURL, apiKey string, body map[string]any) ([]
 	req.Header.Set("Accept", "text/event-stream")
 	resp, err := d.Client.Do(req)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode >= 400 {
 		raw, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("upstream %d: %s", resp.StatusCode, string(raw))
+		return fmt.Errorf("upstream %d: %s", resp.StatusCode, string(raw))
 	}
 	scanner := bufio.NewScanner(resp.Body)
 	scanner.Buffer(make([]byte, 1024), 4*1024*1024)
-	var out []StreamChunk
 	for scanner.Scan() {
 		line := strings.TrimRight(scanner.Text(), "\r")
 		ch, done, err := openai.ParseSSELine(line)
 		if err != nil {
-			return out, err
+			return err
 		}
 		if done {
-			out = append(out, nil)
-			return out, nil
+			if onChunk != nil {
+				if err := onChunk(nil); err != nil {
+					return err
+				}
+			}
+			return nil
 		}
-		if ch != nil {
-			out = append(out, ch)
+		if ch != nil && onChunk != nil {
+			if err := onChunk(ch); err != nil {
+				return err
+			}
 		}
 	}
 	if err := scanner.Err(); err != nil {
-		return out, err
+		return err
 	}
-	out = append(out, nil) // ensure terminator
-	return out, nil
+	// Upstream ended without an explicit [DONE]; synthesize one so the caller
+	// always sees a terminal nil chunk.
+	if onChunk != nil {
+		if err := onChunk(nil); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // TestConnect issues a GET {baseURL}/models to verify connectivity + credentials.

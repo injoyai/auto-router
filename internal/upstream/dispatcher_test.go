@@ -34,7 +34,11 @@ func TestCallStream(t *testing.T) {
 	defer srv.Close()
 
 	d := New()
-	chunks, err := d.CallStream(srv.URL, "sk-test", map[string]any{"model": "gpt-4", "stream": true})
+	var chunks []StreamChunk
+	err := d.CallStream(srv.URL, "sk-test", map[string]any{"model": "gpt-4", "stream": true}, func(ch StreamChunk) error {
+		chunks = append(chunks, ch)
+		return nil
+	})
 	assert.NoError(t, err)
 	assert.Equal(t, "hi", chunks[0].Choices[0].Delta.Content)
 	assert.True(t, chunks[1] == nil) // sentinel [DONE]

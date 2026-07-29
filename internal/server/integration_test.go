@@ -137,3 +137,54 @@ func TestEndToEndDirectiveSwitchOffNotStripped(t *testing.T) {
 	assert.Error(t, err)
 	assert.Nil(t, sess)
 }
+
+// startStreamingDirectiveUpstream emits a directive split across SSE chunks so
+// the streaming buffer-detect logic (I3) can be exercised:
+//   - judge call (model == "judge-mini"): non-streaming JSON, content "gpt-4o";
+//   - execution call (stream): "ok" then "<<next_model:" then " gpt-4o>>done".
+func startStreamingDirectiveUpstream(t *testing.T) string {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		if m, _ := body["model"].(string); m == "judge-mini" {
+			w.Header().Set("Content-Type", "application/json")
+			io.WriteString(w, `{"model":"gpt-4o","choices":[{"index":0,"message":{"role":"assistant","content":"gpt-4o"},"finish_reason":"stop"}],"usage":{"total_tokens":1}}`)
+			return
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		io.WriteString(w, "data: {\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"ok\"}}]}\n\n")
+		io.WriteString(w, "data: {\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"<<next_model:\"}}]}\n\n")
+		io.WriteString(w, "data: {\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" gpt-4o>>done\"}}]}\n\n")
+		io.WriteString(w, "data: [DONE]\n\n")
+	}))
+	t.Cleanup(srv.Close)
+	return srv.URL
+}
+
+// TestEndToEndStreamingDirectiveStripped verifies I3: with real streaming and
+// the directive switch on, a directive split across chunks is stripped from the
+// streamed body (never leaked to the client) and persisted to the session.
+func TestEndToEndStreamingDirectiveStripped(t *testing.T) {
+	url := startStreamingDirectiveUpstream(t)
+	app := newTestApp(t, url)
+	body := `{"model":"auto","stream":true,"messages":[{"role":"user","content":"hi"}]}`
+	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", bytes.NewBufferString(body))
+	req.Header.Set("Authorization", "Bearer "+app.GatewayToken)
+	req.Header.Set("X-Session-Id", "sess-stream")
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	app.Router.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Contains(t, w.Body.String(), "data: ")
+	assert.Contains(t, w.Body.String(), "[DONE]")
+	// directive never leaked into the streamed body
+	assert.False(t, bytes.Contains(w.Body.Bytes(), []byte("next_model")))
+	// visible content before and after the directive is preserved
+	assert.Contains(t, w.Body.String(), "ok")
+	assert.Contains(t, w.Body.String(), "done")
+	// session persisted with the directive's model
+	sess, err := app.Store.GetSession("sess-stream")
+	assert.NoError(t, err)
+	assert.Equal(t, "gpt-4o", sess.NextModel)
+}

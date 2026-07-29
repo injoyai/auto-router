@@ -2,6 +2,7 @@ package routing
 
 import (
 	"fmt"
+	"log"
 	"time"
 
 	"auto-router/internal/model"
@@ -67,11 +68,21 @@ func (e *Engine) Route(req *model.ChatRequest) (*Decision, error) {
 		return nil, fmt.Errorf("get routing config: %w", err)
 	}
 	judge, _ := e.Store.GetJudgeModel()
+	// I4: track judge diagnostics so fallback Decisions still carry JudgeRaw
+	// for the request log, and log failures at warning level.
+	judgeRaw := ""
 	if judge != nil {
 		cands, _ := e.Store.ListEnabledModels()
 		userText := TruncateUserText(req.LastUserMessage(), rc.JudgeMaxInputChars)
 		raw, jerr := e.Judge.Judge(judge, cands, userText)
-		if jerr == nil && raw != "" {
+		switch {
+		case jerr != nil:
+			log.Printf("[WARN] judge call failed: %v", jerr)
+			judgeRaw = "error: " + jerr.Error()
+		case raw == "":
+			log.Printf("[WARN] judge returned empty output")
+			judgeRaw = "error: empty judge output"
+		default:
 			known := make([]string, 0, len(cands))
 			for _, c := range cands {
 				known = append(known, c.Name)
@@ -81,13 +92,15 @@ func (e *Engine) Route(req *model.ChatRequest) (*Decision, error) {
 					return &Decision{ModelName: m.Name, Model: m, Reason: "judge", JudgeRaw: raw}, nil
 				}
 			}
+			log.Printf("[WARN] judge output unparseable: %q", raw)
+			judgeRaw = raw
 		}
 	}
 
 	// 4. Fallback to default model
 	if rc.DefaultModelID != nil {
 		if m, err := e.Store.GetModel(*rc.DefaultModelID); err == nil && m != nil {
-			return &Decision{ModelName: m.Name, Model: m, Reason: "fallback", JudgeRaw: ""}, nil
+			return &Decision{ModelName: m.Name, Model: m, Reason: "fallback", JudgeRaw: judgeRaw}, nil
 		}
 	}
 	return nil, fmt.Errorf("no model available and no default configured")
