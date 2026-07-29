@@ -33,9 +33,6 @@ func ParseSSELine(line string) (*model.Chunk, bool, error) {
 	var ev struct {
 		Type  string          `json:"type"`
 		Delta json.RawMessage `json:"delta"`
-		Usage struct {
-			OutputTokens int `json:"output_tokens"`
-		} `json:"usage"`
 	}
 	if err := json.Unmarshal([]byte(data), &ev); err != nil {
 		return nil, false, err

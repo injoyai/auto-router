@@ -106,11 +106,7 @@ func TestClaudeClientStreaming(t *testing.T) {
 }
 
 // TestClaudeErrorFormat: an unauthorized request to /v1/messages is rejected
-// with 401. NOTE: GatewayAuth middleware is not yet protocol-aware, so it
-// returns its default OpenAI-style error envelope ("type":"auth_error")
-// rather than the Claude envelope ("type":"error"). Making the middleware
-// protocol-aware is a separate concern; here we only assert the 401 status
-// and that an error body is returned.
+// with a 401 in the Claude error envelope (type: error), not the OpenAI shape.
 func TestClaudeErrorFormat(t *testing.T) {
 	app := newTestApp(t, "http://example.com")
 
@@ -122,6 +118,6 @@ func TestClaudeErrorFormat(t *testing.T) {
 	app.Router.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
+	assert.Contains(t, w.Body.String(), `"type":"error"`)
 	assert.Contains(t, w.Body.String(), `"error"`)
-	assert.Contains(t, w.Body.String(), `"type":"auth_error"`)
 }
