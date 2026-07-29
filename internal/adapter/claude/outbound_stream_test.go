@@ -92,3 +92,52 @@ func TestStreamEncoderFinishReason(t *testing.T) {
 	assert.Contains(t, s, "message_delta")
 	assert.Contains(t, s, "tool_use")
 }
+
+func TestStreamEncoderFinishWithoutContent(t *testing.T) {
+	// Finish() called without any content chunks — should still emit message_start
+	enc := NewStreamEncoder("claude-3")
+	b := enc.Finish()
+	s := string(b)
+	assert.Contains(t, s, "message_start", "message_start must be emitted even with no content")
+	assert.Contains(t, s, "message_stop")
+}
+
+func TestStreamEncoderFinishIdempotent(t *testing.T) {
+	enc := NewStreamEncoder("claude-3")
+	enc.EncodeChunk(&model.Chunk{
+		Choices: []model.ChunkChoice{{Index: 0, Delta: model.Delta{Content: "Hi"}}},
+	})
+	b1 := enc.Finish()
+	assert.NotEmpty(t, b1)
+	// Second call should return nil (idempotent)
+	b2 := enc.Finish()
+	assert.Nil(t, b2, "Finish() should be idempotent")
+}
+
+func TestStreamEncoderEncodeAfterFinish(t *testing.T) {
+	enc := NewStreamEncoder("claude-3")
+	enc.EncodeChunk(&model.Chunk{
+		Choices: []model.ChunkChoice{{Index: 0, Delta: model.Delta{Content: "Hi"}}},
+	})
+	enc.Finish()
+	// EncodeChunk after Finish should return nil (terminal state)
+	b := enc.EncodeChunk(&model.Chunk{
+		Choices: []model.ChunkChoice{{Index: 0, Delta: model.Delta{Content: "more"}}},
+	})
+	assert.Nil(t, b, "EncodeChunk after Finish should return nil")
+}
+
+func TestParseSSELineDoneSentinel(t *testing.T) {
+	ch, done, err := ParseSSELine("data: [DONE]")
+	assert.NoError(t, err)
+	assert.Nil(t, ch)
+	assert.True(t, done)
+}
+
+func TestParseSSELineNonTextDelta(t *testing.T) {
+	// input_json_delta (tool-use streaming) should return nil chunk (known limitation)
+	ch, done, err := ParseSSELine(`data: {"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":"{\"loc"}}`)
+	assert.NoError(t, err)
+	assert.False(t, done)
+	assert.Nil(t, ch, "non-text_delta blocks should return nil chunk")
+}

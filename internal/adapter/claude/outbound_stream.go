@@ -64,7 +64,9 @@ func ParseSSELine(line string) (*model.Chunk, bool, error) {
 		var d struct {
 			StopReason string `json:"stop_reason"`
 		}
-		_ = json.Unmarshal(ev.Delta, &d)
+		if err := json.Unmarshal(ev.Delta, &d); err != nil {
+			return nil, false, err
+		}
 		finish := stopReasonMap[d.StopReason]
 		if finish == "" {
 			finish = "stop"
@@ -92,6 +94,7 @@ type StreamEncoder struct {
 	messageStarted bool
 	blockStarted   bool
 	finishEmitted  bool
+	stopped        bool
 }
 
 // NewStreamEncoder creates a new encoder for the given model name.
@@ -103,6 +106,9 @@ func NewStreamEncoder(modelName string) *StreamEncoder {
 // Returns the full SSE text including event/data lines and \n\n separators.
 // Returns nil if the chunk produces no output.
 func (e *StreamEncoder) EncodeChunk(ch *model.Chunk) []byte {
+	if e.finishEmitted {
+		return nil // terminal state: refuse to encode after finish
+	}
 	if ch == nil || len(ch.Choices) == 0 {
 		return nil
 	}
@@ -118,6 +124,7 @@ func (e *StreamEncoder) EncodeChunk(ch *model.Chunk) []byte {
 		}
 		if !e.finishEmitted {
 			e.finishEmitted = true
+			e.ensureMessageStarted(&buf)
 			e.ensureBlockClosed(&buf)
 			ev := map[string]any{
 				"type":  "message_delta",
@@ -173,7 +180,12 @@ func (e *StreamEncoder) EncodeChunk(ch *model.Chunk) []byte {
 // Finish emits terminal events: content_block_stop, message_delta (if not
 // already emitted), and message_stop.
 func (e *StreamEncoder) Finish() []byte {
+	if e.stopped {
+		return nil
+	}
+	e.stopped = true
 	var buf strings.Builder
+	e.ensureMessageStarted(&buf)
 	e.ensureBlockClosed(&buf)
 	if !e.finishEmitted {
 		e.finishEmitted = true
@@ -192,6 +204,28 @@ func (e *StreamEncoder) ensureBlockClosed(buf *strings.Builder) {
 		writeSSEEvent(buf, "content_block_stop", map[string]any{
 			"type":  "content_block_stop",
 			"index": 0,
+		})
+	}
+}
+
+// ensureMessageStarted emits message_start if it has not been emitted yet.
+// Required by the Claude SSE protocol as the first event of a stream, even
+// when no content was produced (e.g. empty upstream response or Finish()
+// called without prior content).
+func (e *StreamEncoder) ensureMessageStarted(buf *strings.Builder) {
+	if !e.messageStarted {
+		e.messageStarted = true
+		writeSSEEvent(buf, "message_start", map[string]any{
+			"type": "message_start",
+			"message": map[string]any{
+				"id":          "msg_router",
+				"type":        "message",
+				"role":        "assistant",
+				"model":       e.model,
+				"content":     []any{},
+				"stop_reason": nil,
+				"usage":       map[string]any{"input_tokens": 0, "output_tokens": 0},
+			},
 		})
 	}
 }
