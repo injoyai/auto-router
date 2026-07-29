@@ -10,9 +10,9 @@ import (
 
 func TestBuildUpstreamRequestBasic(t *testing.T) {
 	req := &model.ChatRequest{
-		Model:   "claude-3-5-sonnet-20241022",
-		Stream:  false,
-		Raw:     map[string]any{"max_tokens": float64(512)},
+		Model:  "claude-3-5-sonnet-20241022",
+		Stream: false,
+		Raw:    map[string]any{"max_tokens": float64(512)},
 		Messages: []model.Message{
 			{Role: "system", Content: "Be helpful"},
 			{Role: "user", Content: "Hi"},
