@@ -62,6 +62,7 @@ func NewApp(cfg Config, st *store.Store, cryptoKey []byte, gatewayToken, adminTo
 
 	v1 := r.Group("/v1", GatewayAuth(gatewayToken))
 	v1.POST("/chat/completions", app.handleChatCompletions)
+	v1.POST("/messages", app.handleMessages)
 	v1.GET("/models", app.handleListModels)
 
 	admin := r.Group("/admin")

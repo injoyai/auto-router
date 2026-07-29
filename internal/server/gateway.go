@@ -7,6 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"auto-router/internal/adapter/claude"
 	"auto-router/internal/adapter/openai"
 	"auto-router/internal/model"
 	"auto-router/internal/routing"
@@ -52,57 +53,86 @@ func injectNextModelDirective(req *model.ChatRequest) {
 	req.Messages = append([]model.Message{{Role: "system", Content: nextModelDirectiveInjection}}, req.Messages...)
 }
 
-func (a *App) handleChatCompletions(c *gin.Context) {
+// chunkEncoder encodes canonical chunks into the client's SSE format.
+type chunkEncoder interface {
+	EncodeChunk(ch *model.Chunk) []byte
+	Finish() []byte
+}
+
+// openaiChunkEncoder is stateless; each chunk is one data: line + \n\n.
+type openaiChunkEncoder struct{}
+
+func (openaiChunkEncoder) EncodeChunk(ch *model.Chunk) []byte {
+	b, _ := openai.EncodeChunk(ch)
+	return append(b, '\n', '\n')
+}
+func (openaiChunkEncoder) Finish() []byte { return []byte("data: [DONE]\n\n") }
+
+// claudeChunkEncoder wraps claude.StreamEncoder.
+type claudeChunkEncoder struct{ enc *claude.StreamEncoder }
+
+func (e *claudeChunkEncoder) EncodeChunk(ch *model.Chunk) []byte { return e.enc.EncodeChunk(ch) }
+func (e *claudeChunkEncoder) Finish() []byte                     { return e.enc.Finish() }
+
+// writeGatewayError writes an error in the client's protocol format.
+func writeGatewayError(c *gin.Context, status int, clientFmt, msg, errType string) {
+	if clientFmt == "claude" {
+		c.JSON(status, gin.H{"type": "error", "error": gin.H{"type": errType, "message": msg}})
+	} else {
+		c.JSON(status, gin.H{"error": gin.H{"message": msg, "type": errType}})
+	}
+}
+
+// handleChat is the shared handler for both /v1/chat/completions and /v1/messages.
+func (a *App) handleChat(c *gin.Context, clientFmt string, parseInbound func(map[string]any) (*model.ChatRequest, error)) {
 	var raw map[string]any
 	if err := c.ShouldBindJSON(&raw); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": gin.H{"message": err.Error(), "type": "invalid_request_error"}})
+		writeGatewayError(c, http.StatusBadRequest, clientFmt, err.Error(), "invalid_request_error")
 		return
 	}
-	req, err := openai.ParseRequest(raw)
+	req, err := parseInbound(raw)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": gin.H{"message": err.Error(), "type": "invalid_request_error"}})
+		writeGatewayError(c, http.StatusBadRequest, clientFmt, err.Error(), "invalid_request_error")
 		return
 	}
 	req.SessionID = c.GetHeader("X-Session-Id")
 	if m := c.GetHeader("X-Route-Model"); m != "" {
 		req.Override = m
 	} else if !req.IsRouteRequested() {
-		req.Override = req.Model // explicit model in body
+		req.Override = req.Model
 	}
 
 	start := time.Now()
 	dec, err := a.Engine.Route(req)
 	if err != nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": gin.H{"message": err.Error(), "type": "router_error"}})
+		writeGatewayError(c, http.StatusServiceUnavailable, clientFmt, err.Error(), "router_error")
 		return
 	}
 
-	// B1: capture the client's original requested model BEFORE we overwrite
-	// req.Model with the routed model name, so the request log records both
-	// accurately (RequestedModel="auto"/display_name/explicit, RoutedModel=chosen).
 	requestedModel := req.Model
 
-	// B2: load routing config to drive the next-model directive switch and
-	// system-prompt injection (spec §4.3). We deliberately ignore errors here
-	// and fall back to "directive disabled" — routing already succeeded, so
-	// this must not abort the request.
 	rc, _ := a.Store.GetRoutingConfig()
 	directiveEnabled := rc != nil && rc.EnableNextModelDirective && req.SessionID != ""
 	if directiveEnabled {
 		injectNextModelDirective(req)
 	}
 
-	// Resolve provider + decrypted api key
 	prov, err := a.Store.GetProvider(dec.Model.ProviderID)
 	if err != nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": gin.H{"message": "provider not found", "type": "router_error"}})
+		writeGatewayError(c, http.StatusServiceUnavailable, clientFmt, "provider not found", "router_error")
 		return
 	}
 	apiKey, _ := store.Decrypt(a.CryptoKey, prov.APIKey)
 
-	// Build upstream request with chosen model
 	req.Model = dec.Model.Name
-	body, _ := openai.BuildUpstreamRequest(req)
+
+	// Build upstream body based on UPSTREAM protocol
+	var body map[string]any
+	if prov.Protocol == "claude" {
+		body, _ = claude.BuildUpstreamRequest(req)
+	} else {
+		body, _ = openai.BuildUpstreamRequest(req)
+	}
 
 	status := http.StatusOK
 	errMsg := ""
@@ -114,14 +144,27 @@ func (a *App) handleChatCompletions(c *gin.Context) {
 	if err != nil {
 		status = http.StatusBadGateway
 		errMsg = err.Error()
-		c.JSON(status, gin.H{"error": gin.H{"message": err.Error(), "type": "upstream_error"}})
+		writeGatewayError(c, status, clientFmt, err.Error(), "upstream_error")
 	} else {
-		// Post-process next-model directive (guarded by the switch)
 		a.postProcessResponse(req, resp, directiveEnabled)
-		b, _ := openai.EncodeResponseToClient(resp)
+		// Encode response based on CLIENT protocol
+		var b []byte
+		if req.ClientFmt == "claude" {
+			b, _ = claude.EncodeResponseToClient(resp)
+		} else {
+			b, _ = openai.EncodeResponseToClient(resp)
+		}
 		c.Data(http.StatusOK, "application/json", b)
 	}
 	a.writeLog(req, dec, requestedModel, status, time.Since(start), errMsg)
+}
+
+func (a *App) handleChatCompletions(c *gin.Context) {
+	a.handleChat(c, "openai", openai.ParseRequest)
+}
+
+func (a *App) handleMessages(c *gin.Context) {
+	a.handleChat(c, "claude", claude.ParseRequest)
 }
 
 func (a *App) streamResponse(c *gin.Context, baseURL, apiKey, protocol string, body map[string]any, dec *routing.Decision, req *model.ChatRequest, requestedModel string, directiveEnabled bool, start time.Time) {
@@ -132,20 +175,16 @@ func (a *App) streamResponse(c *gin.Context, baseURL, apiKey, protocol string, b
 	status := http.StatusOK
 	errMsg := ""
 
-	// I3: streaming directive stripping. Behavior (documented per the task's
-	// simpler acceptable approach, with a partial-prefix holdback to avoid
-	// leaking "<<" at chunk boundaries):
-	//   - When the directive switch is OFF, chunks are flushed verbatim as they
-	//     arrive (real streaming, no buffering).
-	//   - When the switch is ON, delta content is accumulated. We flush the
-	//     portion that cannot be part of a directive immediately, but hold back
-	//     any tail that could be the start of "<<next_model:" (partial-prefix
-	//     holdback). Once "<<next_model:" is seen, no further content is
-	//     flushed until end-of-stream, where ExtractNextModel runs on the full
-	//     assembled text and the remaining (cleaned) tail is flushed.
-	//   - [DONE] is always emitted.
+	// Choose encoder based on CLIENT protocol
+	var enc chunkEncoder
+	if req.ClientFmt == "claude" {
+		enc = &claudeChunkEncoder{enc: claude.NewStreamEncoder(dec.ModelName)}
+	} else {
+		enc = openaiChunkEncoder{}
+	}
+
 	var assembled strings.Builder
-	flushed := 0 // bytes of assembled already flushed (pre-directive only)
+	flushed := 0
 	directiveSeen := false
 
 	flushText := func(text string) {
@@ -153,17 +192,12 @@ func (a *App) streamResponse(c *gin.Context, baseURL, apiKey, protocol string, b
 			return
 		}
 		ch := &model.Chunk{Choices: []model.ChunkChoice{{Index: 0, Delta: model.Delta{Content: text}}}}
-		if b, err := openai.EncodeChunk(ch); err == nil {
-			c.Writer.Write(b)
-			c.Writer.Write([]byte("\n\n"))
-			flusher.Flush()
-		}
+		c.Writer.Write(enc.EncodeChunk(ch))
+		flusher.Flush()
 	}
 
 	streamErr := a.Dispatcher.CallStream(baseURL, apiKey, protocol, body, func(ch *model.Chunk) error {
 		if ch == nil {
-			// [DONE] sentinel: flush any held-back remainder (cleaned when the
-			// switch is on), then emit [DONE].
 			full := assembled.String()
 			if directiveEnabled {
 				clean, mname := routing.ExtractNextModel(full)
@@ -176,19 +210,15 @@ func (a *App) streamResponse(c *gin.Context, baseURL, apiKey, protocol string, b
 			} else if rem := full[flushed:]; rem != "" {
 				flushText(rem)
 			}
-			c.Writer.Write([]byte("data: [DONE]\n\n"))
+			c.Writer.Write(enc.Finish())
 			flusher.Flush()
 			return nil
 		}
 		if !directiveEnabled {
-			// Switch off: flush each chunk verbatim, no directive processing.
-			b, _ := openai.EncodeChunk(ch)
-			c.Writer.Write(b)
-			c.Writer.Write([]byte("\n\n"))
+			c.Writer.Write(enc.EncodeChunk(ch))
 			flusher.Flush()
 			return nil
 		}
-		// Switch on: buffer-detect the directive in accumulated content.
 		if len(ch.Choices) > 0 {
 			assembled.WriteString(ch.Choices[0].Delta.Content)
 		}
@@ -197,7 +227,6 @@ func (a *App) streamResponse(c *gin.Context, baseURL, apiKey, protocol string, b
 		}
 		full := assembled.String()
 		if idx := strings.Index(full, directiveOpen); idx >= 0 {
-			// Directive begins at idx; flush the unflushed portion before it.
 			if idx > flushed {
 				flushText(full[flushed:idx])
 				flushed = idx
@@ -205,7 +234,6 @@ func (a *App) streamResponse(c *gin.Context, baseURL, apiKey, protocol string, b
 			directiveSeen = true
 			return nil
 		}
-		// Hold back a tail that could be a partial directive prefix.
 		hold := directiveHoldback(full[flushed:])
 		safeEnd := len(full) - hold
 		if safeEnd > flushed {
@@ -217,7 +245,7 @@ func (a *App) streamResponse(c *gin.Context, baseURL, apiKey, protocol string, b
 	if streamErr != nil {
 		status = http.StatusBadGateway
 		errMsg = streamErr.Error()
-		c.JSON(status, gin.H{"error": gin.H{"message": streamErr.Error(), "type": "upstream_error"}})
+		writeGatewayError(c, status, req.ClientFmt, streamErr.Error(), "upstream_error")
 	}
 	a.writeLog(req, dec, requestedModel, status, time.Since(start), errMsg)
 }

@@ -53,3 +53,43 @@ func newTestApp(t *testing.T, upstreamURL string) *testApp {
 	app := NewApp(cfg, st, key, "gw-token", "admin-token")
 	return &testApp{App: app, UpstreamURL: upstreamURL}
 }
+
+// newTestAppWithProtocol is like newTestApp but lets the caller pick the
+// provider's protocol (e.g. "claude") and uses a different API key ("sk-claude").
+func newTestAppWithProtocol(t *testing.T, upstreamURL, protocol string) *testApp {
+	t.Helper()
+	st, err := store.Open(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	key := store.DeriveKey("test-seed")
+	prov := &store.Provider{Name: "p", BaseURL: upstreamURL, APIKey: store.Encrypt(key, "sk-claude"), Protocol: protocol, Enabled: true}
+	if err := st.CreateProvider(prov); err != nil {
+		t.Fatal(err)
+	}
+	judge := &store.Model{Name: "judge-mini", DisplayName: "Judge", ProviderID: prov.ID, Enabled: true}
+	if err := st.CreateModel(judge); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.SetJudgeModel(judge.ID); err != nil {
+		t.Fatal(err)
+	}
+	target := &store.Model{Name: "claude-3", DisplayName: "Claude", ProviderID: prov.ID, Enabled: true}
+	if err := st.CreateModel(target); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.UpdateRoutingConfig(&store.RoutingConfig{
+		ID:                       1,
+		JudgeModelID:             &judge.ID,
+		DefaultModelID:           &target.ID,
+		EnableNextModelDirective: true,
+		SessionTTLSeconds:        1800,
+		JudgeMaxInputChars:       2000,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg := config.Config{}
+	app := NewApp(cfg, st, key, "gw-token", "admin-token")
+	return &testApp{App: app, UpstreamURL: upstreamURL}
+}
