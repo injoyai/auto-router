@@ -1,3 +1,116 @@
+import { Card, Col, Row, Statistic, Spin } from 'antd'
+import { Pie, Column } from '@ant-design/charts'
+import { useQuery } from '@tanstack/react-query'
+import { getStats, listLogs } from '../api/logs'
+import { listModels } from '../api/models'
+
 export default function Dashboard() {
-  return null
+  const { data: stats, isLoading: statsLoading } = useQuery({
+    queryKey: ['stats'],
+    queryFn: getStats,
+  })
+
+  const { data: models } = useQuery({
+    queryKey: ['models'],
+    queryFn: listModels,
+  })
+
+  const { data: logsData, isLoading: logsLoading } = useQuery({
+    queryKey: ['logs', 'dashboard'],
+    queryFn: () => listLogs({ page: 1, page_size: 1000 }),
+  })
+
+  if (statsLoading || logsLoading) {
+    return <Spin size="large" style={{ display: 'block', marginTop: 100 }} />
+  }
+
+  const successCount = logsData?.data.filter((l) => l.status < 400).length ?? 0
+  const totalCount = stats?.total ?? 0
+  const successRate = totalCount > 0 ? ((successCount / totalCount) * 100).toFixed(1) : '0'
+
+  const avgLatency = (logsData?.data.length ?? 0) > 0
+    ? Math.round(logsData!.data.reduce((sum, l) => sum + l.latency_ms, 0) / logsData!.data.length)
+    : 0
+
+  const activeModelCount = models?.filter((m) => m.enabled).length ?? 0
+
+  const pieData = (stats?.by_reason ?? []).map((r) => ({
+    type: r.Reason,
+    value: r.Count,
+  }))
+
+  const modelMap: Record<string, number> = {}
+  ;(logsData?.data ?? []).forEach((l) => {
+    if (l.routed_model) {
+      modelMap[l.routed_model] = (modelMap[l.routed_model] ?? 0) + 1
+    }
+  })
+  const columnData = Object.entries(modelMap)
+    .map(([model, count]) => ({ model, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 10)
+
+  const pieConfig = {
+    data: pieData,
+    angleField: 'value',
+    colorField: 'type',
+    radius: 0.8,
+    label: { type: 'outer' as const },
+    legend: { position: 'bottom' as const },
+  }
+
+  const columnConfig = {
+    data: columnData,
+    xField: 'model',
+    yField: 'count',
+    label: { position: 'top' as const },
+    xAxis: { label: { autoRotate: true, autoHide: false } },
+  }
+
+  return (
+    <div>
+      <Row gutter={16} style={{ marginBottom: 24 }}>
+        <Col span={6}>
+          <Card>
+            <Statistic title="总请求数" value={totalCount} />
+          </Card>
+        </Col>
+        <Col span={6}>
+          <Card>
+            <Statistic title="成功率" value={successRate} suffix="%" />
+          </Card>
+        </Col>
+        <Col span={6}>
+          <Card>
+            <Statistic title="活跃模型数" value={activeModelCount} />
+          </Card>
+        </Col>
+        <Col span={6}>
+          <Card>
+            <Statistic title="平均延迟" value={avgLatency} suffix="ms" />
+          </Card>
+        </Col>
+      </Row>
+      <Row gutter={16}>
+        <Col span={12}>
+          <Card title="路由原因分布">
+            {pieData.length > 0 ? (
+              <Pie {...pieConfig} />
+            ) : (
+              <p style={{ color: '#999', textAlign: 'center', padding: 40 }}>暂无数据</p>
+            )}
+          </Card>
+        </Col>
+        <Col span={12}>
+          <Card title="模型使用占比">
+            {columnData.length > 0 ? (
+              <Column {...columnConfig} />
+            ) : (
+              <p style={{ color: '#999', textAlign: 'center', padding: 40 }}>暂无数据</p>
+            )}
+          </Card>
+        </Col>
+      </Row>
+    </div>
+  )
 }
