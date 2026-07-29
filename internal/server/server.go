@@ -101,7 +101,7 @@ func (l *lazyJudge) Judge(judgeModel *store.Model, candidates []store.Model, use
 		return "", err
 	}
 	apiKey, _ := store.Decrypt(l.key, prov.APIKey)
-	return routing.NewJudgeClient(l.disp, prov.BaseURL, apiKey).Judge(judgeModel, candidates, userText)
+	return routing.NewJudgeClient(l.disp, prov.BaseURL, apiKey, prov.Protocol).Judge(judgeModel, candidates, userText)
 }
 
 // StartSessionCleanup launches a goroutine that periodically deletes expired

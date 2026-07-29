@@ -116,7 +116,7 @@ func (a *App) handleTestProvider(c *gin.Context) {
 		return
 	}
 	apiKey, _ := store.Decrypt(a.CryptoKey, p.APIKey)
-	status, err := a.Dispatcher.TestConnect(p.BaseURL, apiKey)
+	status, err := a.Dispatcher.TestConnect(p.BaseURL, apiKey, p.Protocol)
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{"ok": false, "status": status, "error": err.Error()})
 		return

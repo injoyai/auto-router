@@ -107,10 +107,10 @@ func (a *App) handleChatCompletions(c *gin.Context) {
 	status := http.StatusOK
 	errMsg := ""
 	if req.Stream {
-		a.streamResponse(c, prov.BaseURL, apiKey, body, dec, req, requestedModel, directiveEnabled, start)
+		a.streamResponse(c, prov.BaseURL, apiKey, prov.Protocol, body, dec, req, requestedModel, directiveEnabled, start)
 		return
 	}
-	resp, err := a.Dispatcher.Call(prov.BaseURL, apiKey, body)
+	resp, err := a.Dispatcher.Call(prov.BaseURL, apiKey, prov.Protocol, body)
 	if err != nil {
 		status = http.StatusBadGateway
 		errMsg = err.Error()
@@ -124,7 +124,7 @@ func (a *App) handleChatCompletions(c *gin.Context) {
 	a.writeLog(req, dec, requestedModel, status, time.Since(start), errMsg)
 }
 
-func (a *App) streamResponse(c *gin.Context, baseURL, apiKey string, body map[string]any, dec *routing.Decision, req *model.ChatRequest, requestedModel string, directiveEnabled bool, start time.Time) {
+func (a *App) streamResponse(c *gin.Context, baseURL, apiKey, protocol string, body map[string]any, dec *routing.Decision, req *model.ChatRequest, requestedModel string, directiveEnabled bool, start time.Time) {
 	c.Writer.Header().Set("Content-Type", "text/event-stream")
 	c.Writer.Header().Set("Cache-Control", "no-cache")
 	c.Writer.Header().Set("Connection", "keep-alive")
@@ -160,7 +160,7 @@ func (a *App) streamResponse(c *gin.Context, baseURL, apiKey string, body map[st
 		}
 	}
 
-	streamErr := a.Dispatcher.CallStream(baseURL, apiKey, body, func(ch *model.Chunk) error {
+	streamErr := a.Dispatcher.CallStream(baseURL, apiKey, protocol, body, func(ch *model.Chunk) error {
 		if ch == nil {
 			// [DONE] sentinel: flush any held-back remainder (cleaned when the
 			// switch is on), then emit [DONE].

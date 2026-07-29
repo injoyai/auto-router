@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"auto-router/internal/model"
 	"auto-router/internal/store"
 	"auto-router/internal/upstream"
 )
@@ -12,32 +13,53 @@ import (
 // defaultJudgeClient implements JudgeClient by calling the judge model via the
 // upstream dispatcher.
 type defaultJudgeClient struct {
-	disp    *upstream.Dispatcher
-	baseURL string
-	apiKey  string
+	disp     *upstream.Dispatcher
+	baseURL  string
+	apiKey   string
+	protocol string
 }
 
 // Compile-time guarantee that *defaultJudgeClient satisfies JudgeClient.
 var _ JudgeClient = (*defaultJudgeClient)(nil)
 
-func NewJudgeClient(d *upstream.Dispatcher, baseURL, apiKey string) *defaultJudgeClient {
-	return &defaultJudgeClient{disp: d, baseURL: baseURL, apiKey: apiKey}
+func NewJudgeClient(d *upstream.Dispatcher, baseURL, apiKey, protocol string) *defaultJudgeClient {
+	return &defaultJudgeClient{disp: d, baseURL: baseURL, apiKey: apiKey, protocol: protocol}
 }
 
-// Judge calls the judge model with a 10s timeout. I5: the timeout is enforced
-// via context.WithTimeout passed to Dispatcher.CallCtx, which builds the HTTP
-// request with http.NewRequestWithContext — so the in-flight call is cancelled
-// on expiry (no goroutine leak, no dead select branch).
+// Judge calls the judge model with a 10s timeout. The request body is built
+// according to the judge provider's protocol: Claude requires max_tokens and
+// a top-level system field (extracted from the first system message).
 func (j *defaultJudgeClient) Judge(judgeModel *store.Model, candidates []store.Model, userText string) (string, error) {
 	msgs := BuildJudgeMessages(candidates, userText)
-	body := map[string]any{
-		"model":    judgeModel.Name,
-		"messages": msgs,
-		"stream":   false,
+	var body map[string]any
+	if j.protocol == "claude" {
+		// Claude format: extract system, add max_tokens
+		system := ""
+		var userMsgs []model.Message
+		for _, m := range msgs {
+			if m.Role == "system" {
+				system = m.Content
+			} else {
+				userMsgs = append(userMsgs, m)
+			}
+		}
+		body = map[string]any{
+			"model":      judgeModel.Name,
+			"max_tokens": 100,
+			"system":     system,
+			"messages":   userMsgs,
+			"stream":     false,
+		}
+	} else {
+		body = map[string]any{
+			"model":    judgeModel.Name,
+			"messages": msgs,
+			"stream":   false,
+		}
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	resp, err := j.disp.CallCtx(ctx, j.baseURL, j.apiKey, body)
+	resp, err := j.disp.CallCtx(ctx, j.baseURL, j.apiKey, j.protocol, body)
 	if err != nil {
 		return "", err
 	}
