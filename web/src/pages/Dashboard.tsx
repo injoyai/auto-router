@@ -5,31 +5,42 @@ import { getStats, listLogs } from '../api/logs'
 import { listModels } from '../api/models'
 
 export default function Dashboard() {
-  const { data: stats, isLoading: statsLoading } = useQuery({
+  const { data: stats, isLoading: statsLoading, isError: statsError } = useQuery({
     queryKey: ['stats'],
     queryFn: getStats,
   })
 
-  const { data: models } = useQuery({
+  const { data: models, isLoading: modelsLoading, isError: modelsError } = useQuery({
     queryKey: ['models'],
     queryFn: listModels,
   })
 
-  const { data: logsData, isLoading: logsLoading } = useQuery({
+  const { data: logsData, isLoading: logsLoading, isError: logsError } = useQuery({
     queryKey: ['logs', 'dashboard'],
     queryFn: () => listLogs({ page: 1, page_size: 1000 }),
   })
 
-  if (statsLoading || logsLoading) {
+  if (statsLoading || logsLoading || modelsLoading) {
     return <Spin size="large" style={{ display: 'block', marginTop: 100 }} />
   }
 
-  const successCount = logsData?.data.filter((l) => l.status < 400).length ?? 0
-  const totalCount = stats?.total ?? 0
-  const successRate = totalCount > 0 ? ((successCount / totalCount) * 100).toFixed(1) : '0'
+  if (statsError || logsError || modelsError) {
+    return (
+      <Card>
+        <p style={{ color: '#ff4d4f', textAlign: 'center', padding: 40 }}>
+          数据加载失败，请稍后重试
+        </p>
+      </Card>
+    )
+  }
 
-  const avgLatency = (logsData?.data.length ?? 0) > 0
-    ? Math.round(logsData!.data.reduce((sum, l) => sum + l.latency_ms, 0) / logsData!.data.length)
+  const logs = logsData?.data ?? []
+  const totalCount = stats?.total ?? 0
+  const successCount = logs.filter((l) => l.status < 400).length
+  const successRate = logs.length > 0 ? ((successCount / logs.length) * 100).toFixed(1) : '0.0'
+
+  const avgLatency = logs.length > 0
+    ? Math.round(logs.reduce((sum, l) => sum + l.latency_ms, 0) / logs.length)
     : 0
 
   const activeModelCount = models?.filter((m) => m.enabled).length ?? 0
@@ -40,7 +51,7 @@ export default function Dashboard() {
   }))
 
   const modelMap: Record<string, number> = {}
-  ;(logsData?.data ?? []).forEach((l) => {
+  logs.forEach((l) => {
     if (l.routed_model) {
       modelMap[l.routed_model] = (modelMap[l.routed_model] ?? 0) + 1
     }
