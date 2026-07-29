@@ -80,7 +80,7 @@ export default function Models() {
     {
       title: '启用', dataIndex: 'enabled', key: 'enabled',
       render: (_: boolean, r: ModelType) => (
-        <Switch checked={r.enabled} onChange={(v) => updateMut.mutate({ id: r.id, data: { enabled: v } })} />
+        <Switch checked={r.enabled} onChange={(v) => updateMut.mutate({ id: r.id, data: { ...r, enabled: v } })} />
       ),
     },
     {

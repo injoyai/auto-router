@@ -17,7 +17,7 @@ export default function Dashboard() {
 
   const { data: logsData, isLoading: logsLoading, isError: logsError } = useQuery({
     queryKey: ['logs', 'dashboard'],
-    queryFn: () => listLogs({ page: 1, page_size: 1000 }),
+    queryFn: () => listLogs({ page: 1, page_size: 200 }),
   })
 
   if (statsLoading || logsLoading || modelsLoading) {

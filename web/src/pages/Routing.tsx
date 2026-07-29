@@ -38,7 +38,7 @@ export default function Routing() {
 
   if (isLoading) return <Spin size="large" style={{ display: 'block', marginTop: 48 }} />
 
-  const modelOptions = (models ?? []).map((m) => ({ value: m.id, label: `${m.display_name} (${m.name})` }))
+  const modelOptions = (models ?? []).filter((m) => m.enabled).map((m) => ({ value: m.id, label: `${m.display_name} (${m.name})` }))
 
   return (
     <Card title="路由配置">

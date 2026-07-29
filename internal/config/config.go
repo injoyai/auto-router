@@ -7,6 +7,7 @@ type Config struct {
 	DBPath       string
 	AdminToken   string // if empty, generated on first run and stored in DB
 	GatewayToken string // if empty, generated on first run and stored in DB
+	DevMode      bool
 }
 
 func Load() Config {
@@ -15,6 +16,7 @@ func Load() Config {
 		DBPath:       getEnv("DB_PATH", "auto-router.db"),
 		AdminToken:   os.Getenv("ADMIN_TOKEN"),
 		GatewayToken: os.Getenv("GATEWAY_TOKEN"),
+		DevMode:      os.Getenv("DEV") != "",
 	}
 	return c
 }
