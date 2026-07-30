@@ -161,6 +161,33 @@ func (d *Dispatcher) TestModel(baseURL, apiKey, protocol, modelName string) (int
 	return resp.StatusCode, nil
 }
 
+// TestModelCtx is the context-aware variant of TestModel.
+func (d *Dispatcher) TestModelCtx(ctx context.Context, baseURL, apiKey, protocol, modelName string) (int, error) {
+	body := map[string]any{
+		"model":      modelName,
+		"messages":   []map[string]any{{"role": "user", "content": "hi"}},
+		"max_tokens": 1,
+	}
+	b, err := json.Marshal(body)
+	if err != nil {
+		return 0, err
+	}
+	path := upstreamPath(protocol)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, baseURL+path, bytes.NewReader(b))
+	if err != nil {
+		return 0, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	setUpstreamAuthHeaders(req, apiKey, protocol)
+	resp, err := d.Client.Do(req)
+	if err != nil {
+		return 0, err
+	}
+	defer resp.Body.Close()
+	io.Copy(io.Discard, resp.Body)
+	return resp.StatusCode, nil
+}
+
 // upstreamPath returns the endpoint path for the given protocol.
 func upstreamPath(protocol string) string {
 	if protocol == "claude" {

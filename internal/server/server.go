@@ -94,6 +94,7 @@ func NewApp(cfg Config, st *store.Store, cryptoKey []byte, gatewayToken, adminTo
 	authAdmin.PUT("/models/:id", app.handleUpdateModel)
 	authAdmin.DELETE("/models/:id", app.handleDeleteModel)
 	authAdmin.POST("/models/:id/judge", app.handleSetJudge)
+	authAdmin.POST("/models/:id/test", app.handleTestModel)
 	authAdmin.GET("/routing", app.handleGetRouting)
 	authAdmin.PUT("/routing", app.handleUpdateRouting)
 	authAdmin.GET("/logs", app.handleListLogs)

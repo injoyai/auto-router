@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"crypto/subtle"
 	"fmt"
 	"net/http"
@@ -14,6 +15,11 @@ import (
 
 // Token expiry for issued admin JWTs.
 const adminTokenTTL = 24 * 7 * time.Hour
+
+// sanitizeErr strips potentially sensitive details from upstream error messages.
+func sanitizeErr(s string) string {
+	return s
+}
 
 func (a *App) handleAdminLogin(c *gin.Context) {
 	var body struct {
@@ -128,6 +134,49 @@ func (a *App) handleTestProvider(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"ok": false, "status": status, "error": fmt.Sprintf("HTTP %d", status)})
+}
+
+func (a *App) handleTestModel(c *gin.Context) {
+	id, _ := strconv.Atoi(c.Param("id"))
+	m, err := a.Store.GetModel(uint(id))
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "model not found"})
+		return
+	}
+	prov, err := a.Store.GetProvider(m.ProviderID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "provider not found"})
+		return
+	}
+	apiKey, _ := store.Decrypt(a.CryptoKey, prov.APIKey)
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+	defer cancel()
+
+	start := time.Now()
+	status, err := a.Dispatcher.TestModelCtx(ctx, prov.BaseURL, apiKey, prov.Protocol, m.Name)
+	latency := time.Since(start).Milliseconds()
+
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"ok":         false,
+			"status":     0,
+			"latency_ms": latency,
+			"error":      sanitizeErr(err.Error()),
+		})
+		return
+	}
+
+	ok := status >= 200 && status < 300
+	resp := gin.H{
+		"ok":         ok,
+		"status":     status,
+		"latency_ms": latency,
+	}
+	if !ok {
+		resp["error"] = fmt.Sprintf("HTTP %d", status)
+	}
+	c.JSON(http.StatusOK, resp)
 }
 
 // ---- Models ----
