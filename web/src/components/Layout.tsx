@@ -30,26 +30,27 @@ export default function Layout() {
 
   return (
     <AntLayout style={{ minHeight: '100vh' }}>
-      <Sider width={220} theme="light" style={{ borderRight: '1px solid #f0f0f0', position: 'relative' }}>
-        <div style={{ padding: '16px', fontWeight: 700, fontSize: 16, color: '#08979c' }}>
-          Auto Router
-        </div>
+      <Sider width={220} theme="dark" className="aurora-sidebar">
+        <div className="aurora-brand">Auto Router</div>
+        <div className="aurora-brand-sub">AI Model Gateway</div>
         <Menu
           mode="inline"
+          theme="dark"
           selectedKeys={[selectedKey]}
           items={menuItems}
           onClick={({ key }) => navigate(key)}
-          style={{ borderRight: 0 }}
         />
-        <div style={{ position: 'absolute', bottom: 0, width: '100%', padding: '12px 16px' }}>
-          <Button icon={<LogoutOutlined />} block onClick={handleLogout}>
+        <div style={{ position: 'absolute', bottom: 0, width: '100%', padding: '12px 16px', zIndex: 1 }}>
+          <Button icon={<LogoutOutlined />} block onClick={handleLogout} className="aurora-logout">
             退出登录
           </Button>
         </div>
       </Sider>
       <AntLayout>
-        <Content style={{ padding: 24 }}>
-          <Outlet />
+        <Content className="aurora-content" style={{ padding: 24, position: 'relative', zIndex: 1 }}>
+          <div className="aurora-fade-in">
+            <Outlet />
+          </div>
         </Content>
       </AntLayout>
     </AntLayout>

@@ -26,7 +26,7 @@ export default function Dashboard() {
 
   if (statsError || logsError || modelsError) {
     return (
-      <Card>
+      <Card className="aurora-card">
         <p style={{ color: '#ff4d4f', textAlign: 'center', padding: 40 }}>
           数据加载失败，请稍后重试
         </p>
@@ -68,6 +68,7 @@ export default function Dashboard() {
     radius: 0.8,
     label: { type: 'outer' as const },
     legend: { position: 'bottom' as const },
+    color: ['#13c2c2', '#08979c', '#36cfc9', '#5cdbd3', '#87e8de'],
   }
 
   const columnConfig = {
@@ -76,35 +77,37 @@ export default function Dashboard() {
     yField: 'count',
     label: { position: 'top' as const },
     xAxis: { label: { autoRotate: true, autoHide: false } },
+    color: '#13c2c2',
+    columnStyle: { radius: [6, 6, 0, 0] },
   }
 
   return (
     <div>
       <Row gutter={16} style={{ marginBottom: 24 }}>
-        <Col span={6}>
-          <Card>
+        <Col span={6} className="aurora-fade-in aurora-fade-in-1">
+          <Card className="stat-card stat-card-teal">
             <Statistic title="总请求数" value={totalCount} />
           </Card>
         </Col>
-        <Col span={6}>
-          <Card>
+        <Col span={6} className="aurora-fade-in aurora-fade-in-2">
+          <Card className="stat-card stat-card-green">
             <Statistic title="成功率" value={successRate} suffix="%" />
           </Card>
         </Col>
-        <Col span={6}>
-          <Card>
+        <Col span={6} className="aurora-fade-in aurora-fade-in-3">
+          <Card className="stat-card stat-card-blue">
             <Statistic title="活跃模型数" value={activeModelCount} />
           </Card>
         </Col>
-        <Col span={6}>
-          <Card>
+        <Col span={6} className="aurora-fade-in aurora-fade-in-4">
+          <Card className="stat-card stat-card-amber">
             <Statistic title="平均延迟" value={avgLatency} suffix="ms" />
           </Card>
         </Col>
       </Row>
       <Row gutter={16}>
-        <Col span={12}>
-          <Card title="路由原因分布">
+        <Col span={12} className="aurora-fade-in aurora-fade-in-3">
+          <Card title="路由原因分布" className="aurora-card">
             {pieData.length > 0 ? (
               <Pie {...pieConfig} />
             ) : (
@@ -112,8 +115,8 @@ export default function Dashboard() {
             )}
           </Card>
         </Col>
-        <Col span={12}>
-          <Card title="模型使用占比">
+        <Col span={12} className="aurora-fade-in aurora-fade-in-4">
+          <Card title="模型使用占比" className="aurora-card">
             {columnData.length > 0 ? (
               <Column {...columnConfig} />
             ) : (

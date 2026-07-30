@@ -1,0 +1,418 @@
+/* ============================================
+   Aurora Console — Auto Router 全局样式
+   设计方向：精致深色侧边栏 + 清爽青内容区
+   ============================================ */
+
+/* ---- 字体 ---- */
+:root {
+  --font-display: 'Outfit', sans-serif;
+  --font-body: 'DM Sans', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+
+  /* 色板 */
+  --teal-50: #e6fffb;
+  --teal-100: #b5f5ec;
+  --teal-200: #87e8de;
+  --teal-300: #5cdbd3;
+  --teal-400: #36cfc9;
+  --teal-500: #13c2c2;
+  --teal-600: #08979c;
+  --teal-700: #006d75;
+  --teal-800: #00474d;
+  --teal-900: #002329;
+
+  --slate-800: #1e293b;
+  --slate-900: #0f172a;
+
+  /* 阴影 */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 8px 32px rgba(19, 194, 194, 0.08);
+  --shadow-glow: 0 0 24px rgba(19, 194, 194, 0.15);
+}
+
+* {
+  font-family: var(--font-body);
+}
+
+body {
+  margin: 0;
+  background: #f0f7f7;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ---- 标题字体 ---- */
+h1, h2, h3, h4, h5, h6,
+.ant-typography h1, .ant-typography h2, .ant-typography h3,
+.ant-typography h4, .ant-typography h5, .ant-typography h6 {
+  font-family: var(--font-display) !important;
+  letter-spacing: -0.02em;
+}
+
+/* ---- 自定义滚动条 ---- */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--teal-300);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--teal-500);
+}
+
+/* ============================================
+   侧边栏 — 深色渐变
+   ============================================ */
+.aurora-sidebar {
+  background: linear-gradient(180deg, #0c2a2d 0%, #0a1f23 50%, #081519 100%) !important;
+  position: relative;
+  overflow: hidden;
+}
+
+/* 侧边栏顶部光晕装饰 */
+.aurora-sidebar::before {
+  content: '';
+  position: absolute;
+  top: -60px;
+  left: -20px;
+  width: 200px;
+  height: 200px;
+  background: radial-gradient(circle, rgba(19, 194, 194, 0.15) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+/* 侧边栏底部光晕装饰 */
+.aurora-sidebar::after {
+  content: '';
+  position: absolute;
+  bottom: -80px;
+  right: -40px;
+  width: 180px;
+  height: 180px;
+  background: radial-gradient(circle, rgba(54, 207, 201, 0.08) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+/* 品牌标识 */
+.aurora-brand {
+  font-family: var(--font-display) !important;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  background: linear-gradient(135deg, var(--teal-300), var(--teal-500));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  padding: 20px 20px 16px;
+  position: relative;
+  z-index: 1;
+}
+
+.aurora-brand-sub {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: rgba(133, 216, 208, 0.4);
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  padding: 0 20px 12px;
+  position: relative;
+  z-index: 1;
+}
+
+/* 侧边栏菜单覆盖 */
+.aurora-sidebar .ant-menu {
+  background: transparent !important;
+  border-right: none !important;
+  position: relative;
+  z-index: 1;
+  padding: 0 8px;
+}
+
+.aurora-sidebar .ant-menu-item {
+  color: rgba(203, 213, 225, 0.6) !important;
+  border-radius: 8px;
+  margin: 2px 0 !important;
+  width: auto !important;
+  transition: all 0.25s ease;
+}
+
+.aurora-sidebar .ant-menu-item:hover {
+  color: var(--teal-200) !important;
+  background: rgba(19, 194, 194, 0.08) !important;
+}
+
+.aurora-sidebar .ant-menu-item-selected {
+  background: linear-gradient(135deg, rgba(19, 194, 194, 0.2), rgba(8, 151, 156, 0.1)) !important;
+  color: var(--teal-300) !important;
+  box-shadow: inset 3px 0 0 var(--teal-400);
+}
+
+.aurora-sidebar .ant-menu-item-selected::after {
+  content: '';
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--teal-400);
+  box-shadow: 0 0 8px var(--teal-400);
+}
+
+/* 退出按钮 */
+.aurora-logout {
+  background: rgba(255, 77, 79, 0.08) !important;
+  border: 1px solid rgba(255, 77, 79, 0.15) !important;
+  color: rgba(255, 120, 120, 0.8) !important;
+  transition: all 0.25s ease;
+}
+
+.aurora-logout:hover {
+  background: rgba(255, 77, 79, 0.15) !important;
+  color: #ff7875 !important;
+}
+
+/* ============================================
+   内容区背景
+   ============================================ */
+.aurora-content {
+  background: #f0f7f7;
+  background-image:
+    radial-gradient(circle at 20% 0%, rgba(19, 194, 194, 0.03) 0%, transparent 50%),
+    radial-gradient(circle at 80% 100%, rgba(54, 207, 201, 0.03) 0%, transparent 50%);
+  min-height: 100vh;
+}
+
+/* ============================================
+   卡片增强
+   ============================================ */
+.aurora-card {
+  border: none !important;
+  box-shadow: var(--shadow-md) !important;
+  border-radius: 12px !important;
+  transition: box-shadow 0.3s ease, transform 0.2s ease;
+  overflow: hidden;
+  position: relative;
+}
+
+.aurora-card:hover {
+  box-shadow: var(--shadow-lg) !important;
+}
+
+.aurora-card .ant-card-head {
+  border-bottom: 1px solid #f0f5f5 !important;
+  font-family: var(--font-display);
+  font-weight: 600;
+}
+
+/* ============================================
+   统计卡片 — 渐变装饰
+   ============================================ */
+.stat-card {
+  position: relative;
+  overflow: hidden;
+  border: none !important;
+  border-radius: 14px !important;
+  box-shadow: var(--shadow-md) !important;
+  transition: transform 0.2s ease, box-shadow 0.3s ease;
+}
+
+.stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg) !important;
+}
+
+.stat-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 4px;
+  height: 100%;
+}
+
+.stat-card-teal::before { background: linear-gradient(180deg, var(--teal-400), var(--teal-600)); }
+.stat-card-green::before { background: linear-gradient(180deg, #52c41a, #389e0d); }
+.stat-card-blue::before { background: linear-gradient(180deg, #1890ff, #096dd9); }
+.stat-card-amber::before { background: linear-gradient(180deg, #faad14, #d48806); }
+
+.stat-card .ant-statistic-title {
+  font-size: 13px !important;
+  color: #64748b !important;
+  font-weight: 500;
+}
+
+.stat-card .ant-statistic-content {
+  font-family: var(--font-display) !important;
+  font-size: 28px !important;
+  font-weight: 700 !important;
+  color: #0f172a !important;
+}
+
+/* ============================================
+   登录页 — 渐变网格背景 + 玻璃卡片
+   ============================================ */
+.aurora-login-bg {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #0a1f23 0%, #0c2a2d 40%, #081519 100%);
+  position: relative;
+  overflow: hidden;
+}
+
+/* 登录页浮动光球 */
+.aurora-login-bg::before {
+  content: '';
+  position: absolute;
+  top: 10%;
+  left: 10%;
+  width: 400px;
+  height: 400px;
+  background: radial-gradient(circle, rgba(19, 194, 194, 0.15) 0%, transparent 70%);
+  border-radius: 50%;
+  animation: aurora-float 8s ease-in-out infinite;
+}
+
+.aurora-login-bg::after {
+  content: '';
+  position: absolute;
+  bottom: 10%;
+  right: 10%;
+  width: 350px;
+  height: 350px;
+  background: radial-gradient(circle, rgba(54, 207, 201, 0.1) 0%, transparent 70%);
+  border-radius: 50%;
+  animation: aurora-float 10s ease-in-out infinite reverse;
+}
+
+@keyframes aurora-float {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(30px, -20px) scale(1.05); }
+}
+
+/* 登录页网格背景 */
+.aurora-grid-pattern {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(19, 194, 194, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(19, 194, 194, 0.03) 1px, transparent 1px);
+  background-size: 40px 40px;
+  pointer-events: none;
+}
+
+.aurora-glass-card {
+  background: rgba(255, 255, 255, 0.95) !important;
+  backdrop-filter: blur(20px);
+  border-radius: 20px !important;
+  box-shadow:
+    0 24px 48px rgba(0, 0, 0, 0.3),
+    0 0 0 1px rgba(255, 255, 255, 0.1) !important;
+  position: relative;
+  z-index: 1;
+}
+
+/* ============================================
+   页面加载动画
+   ============================================ */
+@keyframes aurora-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.aurora-fade-in {
+  animation: aurora-fade-up 0.5s ease-out both;
+}
+
+.aurora-fade-in-1 { animation-delay: 0.05s; }
+.aurora-fade-in-2 { animation-delay: 0.1s; }
+.aurora-fade-in-3 { animation-delay: 0.15s; }
+.aurora-fade-in-4 { animation-delay: 0.2s; }
+
+/* ============================================
+   表格增强
+   ============================================ */
+.ant-table {
+  border-radius: 10px !important;
+  overflow: hidden;
+}
+
+.ant-table-thead > tr > th {
+  background: #f7fafa !important;
+  font-family: var(--font-display) !important;
+  font-weight: 600 !important;
+  color: #475569 !important;
+  border-bottom: 2px solid #e6fffb !important;
+}
+
+.ant-table-tbody > tr:hover > td {
+  background: #f0fdfa !important;
+}
+
+/* ============================================
+   按钮微交互
+   ============================================ */
+.ant-btn-primary {
+  box-shadow: 0 2px 8px rgba(19, 194, 194, 0.25) !important;
+  transition: all 0.25s ease !important;
+}
+
+.ant-btn-primary:hover {
+  box-shadow: 0 4px 16px rgba(19, 194, 194, 0.35) !important;
+  transform: translateY(-1px);
+}
+
+.ant-btn-primary:active {
+  transform: translateY(0);
+}
+
+/* ============================================
+   Modal 增强
+   ============================================ */
+.ant-modal-content {
+  border-radius: 16px !important;
+  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.12) !important;
+}
+
+.ant-modal-header {
+  border-radius: 16px 16px 0 0 !important;
+}
+
+/* ============================================
+   Tag 增强
+   ============================================ */
+.ant-tag {
+  border-radius: 6px !important;
+  font-weight: 500;
+  font-size: 12px;
+}
+
+/* ============================================
+   噪点纹理（细微）
+   ============================================ */
+.aurora-content::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.015'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 0;
+}

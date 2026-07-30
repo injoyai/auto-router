@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import zhCN from 'antd/locale/zh_CN'
 import App from './App'
 import theme from './theme'
+import './global.css'
 
 const queryClient = new QueryClient({
   defaultOptions: {
