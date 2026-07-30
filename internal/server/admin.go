@@ -16,11 +16,6 @@ import (
 // Token expiry for issued admin JWTs.
 const adminTokenTTL = 24 * 7 * time.Hour
 
-// sanitizeErr strips potentially sensitive details from upstream error messages.
-func sanitizeErr(s string) string {
-	return s
-}
-
 func (a *App) handleAdminLogin(c *gin.Context) {
 	var body struct {
 		Token string `json:"token"`
@@ -160,9 +155,9 @@ func (a *App) handleTestModel(c *gin.Context) {
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"ok":         false,
-			"status":     0,
+			"status":     status,
 			"latency_ms": latency,
-			"error":      sanitizeErr(err.Error()),
+			"error":      err.Error(),
 		})
 		return
 	}
