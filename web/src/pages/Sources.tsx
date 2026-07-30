@@ -32,7 +32,7 @@ export default function Sources() {
   const [selectedProviderId, setSelectedProviderId] = useState<number | null>(null)
 
   const { data: models, isLoading: modelsLoading } = useQuery({
-    queryKey: ['models', selectedProviderId],
+    queryKey: ['models'],
     queryFn: listModels,
     enabled: selectedProviderId !== null,
   })
