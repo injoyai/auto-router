@@ -69,7 +69,7 @@ export default function Logs() {
       render: (v: number) => <span style={{ color: v < 400 ? '#10b981' : '#f43f5e', fontWeight: 600 }}>{v}</span>,
     },
     {
-      title: '延迟', dataIndex: 'latency_ms', key: 'latency_ms', width: 80,
+      title: '耗时', dataIndex: 'latency_ms', key: 'latency_ms', width: 80,
       render: (v: number) => `${v}ms`,
     },
     {
