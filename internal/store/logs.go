@@ -44,3 +44,50 @@ func (s *Store) ListLogs(page, pageSize int, reason, model string) ([]RequestLog
 	err := q.Order("id desc").Offset((page - 1) * pageSize).Limit(pageSize).Find(&logs).Error
 	return logs, total, err
 }
+
+// TokenStatRow is one row of token aggregation.
+type TokenStatRow struct {
+	Model            string `json:"model"`
+	Provider         string `json:"provider"`
+	Count            int64  `json:"count"`
+	PromptTokens     int64  `json:"prompt_tokens"`
+	CompletionTokens int64  `json:"completion_tokens"`
+	TotalTokens      int64  `json:"total_tokens"`
+}
+
+// TokenStatsTotal returns the sum of total_tokens across all logs.
+func (s *Store) TokenStatsTotal() (int64, error) {
+	var total int64
+	err := s.DB.Model(&RequestLog{}).Where("total_tokens > 0").Select("COALESCE(SUM(total_tokens), 0)").Scan(&total).Error
+	return total, err
+}
+
+// TokenStatsByModel aggregates token usage grouped by routed_model,
+// ordered by total_tokens desc, limited to 10.
+func (s *Store) TokenStatsByModel() ([]TokenStatRow, error) {
+	var rows []TokenStatRow
+	err := s.DB.Model(&RequestLog{}).
+		Select("routed_model as model, count(*) as count, sum(prompt_tokens) as prompt_tokens, sum(completion_tokens) as completion_tokens, sum(total_tokens) as total_tokens").
+		Where("routed_model != '' AND total_tokens > 0").
+		Group("routed_model").
+		Order("total_tokens desc").
+		Limit(10).
+		Scan(&rows).Error
+	return rows, err
+}
+
+// TokenStatsByProvider aggregates token usage grouped by provider name,
+// joining models+providers to resolve the provider name. Limited to 10.
+func (s *Store) TokenStatsByProvider() ([]TokenStatRow, error) {
+	var rows []TokenStatRow
+	err := s.DB.Table("request_logs").
+		Select("providers.name as provider, count(*) as count, sum(request_logs.prompt_tokens) as prompt_tokens, sum(request_logs.completion_tokens) as completion_tokens, sum(request_logs.total_tokens) as total_tokens").
+		Joins("LEFT JOIN models ON request_logs.routed_model = models.name").
+		Joins("LEFT JOIN providers ON models.provider_id = providers.id").
+		Where("request_logs.routed_model != '' AND request_logs.total_tokens > 0 AND providers.name != ''").
+		Group("providers.name").
+		Order("total_tokens desc").
+		Limit(10).
+		Scan(&rows).Error
+	return rows, err
+}
