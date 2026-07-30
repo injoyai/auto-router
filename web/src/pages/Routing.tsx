@@ -41,7 +41,7 @@ export default function Routing() {
   const modelOptions = (models ?? []).filter((m) => m.enabled).map((m) => ({ value: m.id, label: `${m.display_name} (${m.name})` }))
 
   return (
-    <Card title="路由配置" className="aurora-card" style={{ maxWidth: 600 }}>
+    <Card title="路由配置" className="mono-card" style={{ maxWidth: 600 }}>
       <Form form={form} layout="vertical" style={{ maxWidth: 500 }}>
         <Form.Item name="judge_model_id" label="判定模型">
           <Select allowClear placeholder="选择判定模型" options={modelOptions} />

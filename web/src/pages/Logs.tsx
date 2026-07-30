@@ -67,7 +67,7 @@ export default function Logs() {
 
   return (
     <div>
-      <Card size="small" className="aurora-card" style={{ marginBottom: 16 }}>
+      <Card size="small" className="mono-card" style={{ marginBottom: 16 }}>
         <Space wrap>
           <Select
             placeholder="路由原因"

@@ -26,8 +26,8 @@ export default function Dashboard() {
 
   if (statsError || logsError || modelsError) {
     return (
-      <Card className="aurora-card">
-        <p style={{ color: '#ff4d4f', textAlign: 'center', padding: 40 }}>
+      <Card className="mono-card">
+        <p style={{ color: '#ef4444', textAlign: 'center', padding: 40 }}>
           数据加载失败，请稍后重试
         </p>
       </Card>
@@ -68,7 +68,7 @@ export default function Dashboard() {
     radius: 0.8,
     label: { type: 'outer' as const },
     legend: { position: 'bottom' as const },
-    color: ['#13c2c2', '#08979c', '#36cfc9', '#5cdbd3', '#87e8de'],
+    color: ['#0d9488', '#14b8a6', '#5eead4', '#99f6e4', '#ccfbf1'],
   }
 
   const columnConfig = {
@@ -77,50 +77,50 @@ export default function Dashboard() {
     yField: 'count',
     label: { position: 'top' as const },
     xAxis: { label: { autoRotate: true, autoHide: false } },
-    color: '#13c2c2',
-    columnStyle: { radius: [6, 6, 0, 0] },
+    color: '#0d9488',
+    columnStyle: { radius: [4, 4, 0, 0] },
   }
 
   return (
     <div>
-      <Row gutter={16} style={{ marginBottom: 24 }}>
-        <Col span={6} className="aurora-fade-in aurora-fade-in-1">
-          <Card className="stat-card stat-card-teal">
+      <Row gutter={[20, 20]} style={{ marginBottom: 20 }}>
+        <Col span={6} className="mono-fade-in mono-fade-in-1">
+          <Card className="stat-card">
             <Statistic title="总请求数" value={totalCount} />
           </Card>
         </Col>
-        <Col span={6} className="aurora-fade-in aurora-fade-in-2">
-          <Card className="stat-card stat-card-green">
+        <Col span={6} className="mono-fade-in mono-fade-in-2">
+          <Card className="stat-card">
             <Statistic title="成功率" value={successRate} suffix="%" />
           </Card>
         </Col>
-        <Col span={6} className="aurora-fade-in aurora-fade-in-3">
-          <Card className="stat-card stat-card-blue">
+        <Col span={6} className="mono-fade-in mono-fade-in-3">
+          <Card className="stat-card">
             <Statistic title="活跃模型数" value={activeModelCount} />
           </Card>
         </Col>
-        <Col span={6} className="aurora-fade-in aurora-fade-in-4">
-          <Card className="stat-card stat-card-amber">
+        <Col span={6} className="mono-fade-in mono-fade-in-4">
+          <Card className="stat-card">
             <Statistic title="平均延迟" value={avgLatency} suffix="ms" />
           </Card>
         </Col>
       </Row>
-      <Row gutter={16}>
-        <Col span={12} className="aurora-fade-in aurora-fade-in-3">
-          <Card title="路由原因分布" className="aurora-card">
+      <Row gutter={20}>
+        <Col span={12} className="mono-fade-in mono-fade-in-3">
+          <Card title="路由原因分布" className="mono-card">
             {pieData.length > 0 ? (
               <Pie {...pieConfig} />
             ) : (
-              <p style={{ color: '#999', textAlign: 'center', padding: 40 }}>暂无数据</p>
+              <p style={{ color: '#a3a3a3', textAlign: 'center', padding: 40 }}>暂无数据</p>
             )}
           </Card>
         </Col>
-        <Col span={12} className="aurora-fade-in aurora-fade-in-4">
-          <Card title="模型使用占比" className="aurora-card">
+        <Col span={12} className="mono-fade-in mono-fade-in-4">
+          <Card title="模型使用占比" className="mono-card">
             {columnData.length > 0 ? (
               <Column {...columnConfig} />
             ) : (
-              <p style={{ color: '#999', textAlign: 'center', padding: 40 }}>暂无数据</p>
+              <p style={{ color: '#a3a3a3', textAlign: 'center', padding: 40 }}>暂无数据</p>
             )}
           </Card>
         </Col>
