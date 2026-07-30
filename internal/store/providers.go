@@ -7,6 +7,7 @@ type Provider struct {
 	Name      string    `gorm:"not null" json:"name"`
 	BaseURL   string    `gorm:"not null" json:"base_url"`
 	APIKey    string    `gorm:"not null" json:"-"`        // encrypted; never JSON-exposed
+	HasAPIKey bool      `gorm:"-" json:"has_api_key"`     // non-persisted; true if APIKey is set
 	Protocol  string    `gorm:"not null" json:"protocol"` // openai | claude
 	Enabled   bool      `gorm:"default:true" json:"enabled"`
 	CreatedAt time.Time `json:"created_at"`

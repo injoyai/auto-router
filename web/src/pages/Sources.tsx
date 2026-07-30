@@ -124,11 +124,18 @@ export default function Sources() {
   }
   const openEditProv = (p: ProviderType) => {
     setEditingProv(p)
-    provForm.setFieldsValue(p)
+    provForm.setFieldsValue({
+      ...p,
+      api_key: p.has_api_key ? '********' : '',
+    })
     setProvModalOpen(true)
   }
   const handleProvSubmit = async () => {
     const vals = await provForm.validateFields()
+    // 占位符不提交，后端空值会保留原 key
+    if (vals.api_key === '********') {
+      vals.api_key = ''
+    }
     try {
       if (editingProv) {
         await updateProvMut.mutateAsync({ id: editingProv.id, data: vals })
@@ -192,7 +199,7 @@ export default function Sources() {
     { title: '描述', dataIndex: 'description', key: 'description', ellipsis: true },
     {
       title: '判定', key: 'is_judge',
-      render: (_: unknown, r: ModelType) => judgeModelId === r.id ? <Tag color="cyan">判定模型</Tag> : null,
+      render: (_: unknown, r: ModelType) => judgeModelId === r.id ? <Tag color="blue">判定模型</Tag> : null,
     },
     {
       title: '启用', dataIndex: 'enabled', key: 'enabled',
@@ -215,142 +222,140 @@ export default function Sources() {
   ]
 
   return (
-    <div style={{ display: 'flex', gap: 16, minHeight: 'calc(100vh - 112px)' }}>
-      {/* Left: Provider list */}
-      <div style={{ width: 280, flexShrink: 0 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-          <strong>API 源</strong>
-          <Button type="primary" size="small" icon={<PlusOutlined />} onClick={openCreateProv}>添加</Button>
-        </div>
-        {provLoading ? (
-          <Spin />
-        ) : providers && providers.length > 0 ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            {providers.map((p) => (
-              <div
-                key={p.id}
-                onClick={() => setSelectedProviderId(p.id)}
-                style={{
-                  padding: '8px 12px',
-                  borderRadius: 6,
-                  cursor: 'pointer',
-                  background: p.id === selectedProviderId ? '#e6fffb' : '#fafafa',
-                  border: p.id === selectedProviderId ? '1px solid #87e8de' : '1px solid #f0f0f0',
-                  opacity: p.enabled ? 1 : 0.5,
-                }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontWeight: p.id === selectedProviderId ? 600 : 400 }}>{p.name}</span>
-                  <Tag color={protocolColors[p.protocol] ?? 'default'} style={{ marginRight: 0 }}>{p.protocol}</Tag>
-                </div>
-                <Space size="small" style={{ marginTop: 4 }} onClick={(e) => e.stopPropagation()}>
-                  <Button size="small" type="link" style={{ padding: 0 }} onClick={() => openEditProv(p)}>编辑</Button>
-                  <Popconfirm title="确认删除？" onConfirm={() => deleteProvMut.mutate(p.id)}>
-                    <Button size="small" type="link" danger style={{ padding: 0 }}>删除</Button>
-                  </Popconfirm>
-                </Space>
-              </div>
-            ))}
+    <div>
+      <div className="page-title">模型管理</div>
+      <div className="page-subtitle">管理 API 源与模型配置</div>
+      <div style={{ display: 'flex', gap: 16, minHeight: 'calc(100vh - 160px)' }}>
+        {/* Left: Provider list */}
+        <div style={{ width: 280, flexShrink: 0 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+            <strong style={{ fontFamily: "'Sora', sans-serif", fontSize: 15 }}>API 源</strong>
+            <Button type="primary" size="small" icon={<PlusOutlined />} onClick={openCreateProv}>添加</Button>
           </div>
-        ) : (
-          <Empty description="暂无 API 源" />
-        )}
-      </div>
-
-      {/* Right: Model table */}
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-          <strong>{selectedProvider ? `${selectedProvider.name} 的模型` : '模型'}</strong>
-          <Button type="primary" icon={<PlusOutlined />} onClick={openCreateModel} disabled={!selectedProviderId}>
-            添加模型
-          </Button>
+          {provLoading ? (
+            <Spin />
+          ) : providers && providers.length > 0 ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {providers.map((p) => (
+                <div
+                  key={p.id}
+                  className={`provider-item ${p.id === selectedProviderId ? 'provider-item--active' : ''}`}
+                  onClick={() => setSelectedProviderId(p.id)}
+                  style={{ opacity: p.enabled ? 1 : 0.5 }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontWeight: p.id === selectedProviderId ? 700 : 500 }}>{p.name}</span>
+                    <Tag color={protocolColors[p.protocol] ?? 'default'} style={{ marginRight: 0 }}>{p.protocol}</Tag>
+                  </div>
+                  <Space size="small" style={{ marginTop: 4 }} onClick={(e) => e.stopPropagation()}>
+                    <Button size="small" type="link" style={{ padding: 0 }} onClick={() => openEditProv(p)}>编辑</Button>
+                    <Popconfirm title="确认删除？" onConfirm={() => deleteProvMut.mutate(p.id)}>
+                      <Button size="small" type="link" danger style={{ padding: 0 }}>删除</Button>
+                    </Popconfirm>
+                  </Space>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <Empty description="暂无 API 源" />
+          )}
         </div>
-        <Table
-          columns={modelColumns}
-          dataSource={filteredModels}
-          rowKey="id"
-          loading={modelsLoading}
-          rowClassName={(r) => judgeModelId === r.id ? 'ant-table-row-selected' : ''}
-          onRow={(r) => ({
-            style: judgeModelId === r.id ? { backgroundColor: '#f0fdfa' } : undefined,
-          })}
-          locale={{ emptyText: selectedProviderId ? '暂无模型' : '请先选择左侧的 API 源' }}
-        />
-      </div>
 
-      {/* Provider Modal */}
-      <Modal
-        title={editingProv ? '编辑 API 源' : '添加 API 源'}
-        open={provModalOpen}
-        onOk={handleProvSubmit}
-        onCancel={() => setProvModalOpen(false)}
-        confirmLoading={createProvMut.isPending || updateProvMut.isPending}
-      >
-        <Form form={provForm} layout="vertical">
-          <Form.Item name="name" label="名称" rules={[{ required: true, message: '请输入名称' }]}>
-            <Input />
-          </Form.Item>
-          <Form.Item name="base_url" label="Base URL" rules={[{ required: true, message: '请输入地址' }]}>
-            <Input placeholder="https://api.openai.com/v1" />
-          </Form.Item>
-          <Form.Item name="api_key" label="API Key" rules={[{ required: !editingProv, message: '请输入密钥' }]}>
-            <Input.Password />
-          </Form.Item>
-          <Form.Item name="protocol" label="协议" rules={[{ required: true }]}>
-            <Select options={[{ value: 'openai', label: 'OpenAI' }, { value: 'claude', label: 'Claude' }]} />
-          </Form.Item>
-          <Form.Item name="enabled" label="启用" valuePropName="checked">
-            <Switch />
-          </Form.Item>
-        </Form>
-      </Modal>
-
-      {/* Model Modal */}
-      <Modal
-        title={editingModel ? '编辑模型' : '添加模型'}
-        open={modelModalOpen}
-        onOk={handleModelSubmit}
-        onCancel={() => setModelModalOpen(false)}
-        confirmLoading={createModelMut.isPending || updateModelMut.isPending}
-      >
-        <Form form={modelForm} layout="vertical">
-          <Form.Item name="name" label="名称" rules={[{ required: true }]}>
-            <Input placeholder="发给上游的真实 model id" />
-          </Form.Item>
-          <Form.Item name="display_name" label="显示名" rules={[{ required: true }]}>
-            <Input />
-          </Form.Item>
-          <Form.Item name="provider_id" label="API 源" rules={[{ required: true }]}>
-            <Select
-              disabled
-              options={(providers ?? []).filter((p) => p.enabled).map((p) => ({ value: p.id, label: p.name }))}
-            />
-          </Form.Item>
-          <Form.Item name="description" label="描述">
-            <Input.TextArea placeholder="给判定模型看的描述" />
-          </Form.Item>
-          <Form.Item name="enabled" label="启用" valuePropName="checked">
-            <Switch />
-          </Form.Item>
-        </Form>
-      </Modal>
-
-      {/* Model Test Modal */}
-      <Modal
-        title="模型测试"
-        open={modelTestOpen}
-        footer={<Button onClick={() => setModelTestOpen(false)}>关闭</Button>}
-        onCancel={() => setModelTestOpen(false)}
-      >
-        {modelTestLoading && <p>正在测试...</p>}
-        {modelTestResult && (
-          <Result
-            status={modelTestResult.ok ? 'success' : 'error'}
-            title={modelTestResult.ok ? '模型可用' : '模型不可用'}
-            subTitle={modelTestResult.ok ? `耗时 ${modelTestResult.latency_ms}ms` : (modelTestResult.error ?? `HTTP ${modelTestResult.status}`)}
+        {/* Right: Model table */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+            <strong style={{ fontFamily: "'Sora', sans-serif", fontSize: 15 }}>{selectedProvider ? `${selectedProvider.name} 的模型` : '模型'}</strong>
+            <Button type="primary" icon={<PlusOutlined />} onClick={openCreateModel} disabled={!selectedProviderId}>
+              添加模型
+            </Button>
+          </div>
+          <Table
+            columns={modelColumns}
+            dataSource={filteredModels}
+            rowKey="id"
+            loading={modelsLoading}
+            rowClassName={(r) => judgeModelId === r.id ? 'ant-table-row-selected' : ''}
+            onRow={(r) => ({
+              style: judgeModelId === r.id ? { backgroundColor: '#eef2ff' } : undefined,
+            })}
+            locale={{ emptyText: selectedProviderId ? '暂无模型' : '请先选择左侧的 API 源' }}
           />
-        )}
-      </Modal>
+        </div>
+
+        {/* Provider Modal */}
+        <Modal
+          title={editingProv ? '编辑 API 源' : '添加 API 源'}
+          open={provModalOpen}
+          onOk={handleProvSubmit}
+          onCancel={() => setProvModalOpen(false)}
+          confirmLoading={createProvMut.isPending || updateProvMut.isPending}
+        >
+          <Form form={provForm} layout="vertical">
+            <Form.Item name="name" label="名称" rules={[{ required: true, message: '请输入名称' }]}>
+              <Input />
+            </Form.Item>
+            <Form.Item name="base_url" label="Base URL" rules={[{ required: true, message: '请输入地址' }]}>
+              <Input placeholder="https://api.openai.com/v1" />
+            </Form.Item>
+            <Form.Item name="api_key" label="API Key" rules={[{ required: !editingProv, message: '请输入密钥' }]}>
+              <Input.Password placeholder={editingProv ? '留空保持不变' : '请输入密钥'} />
+            </Form.Item>
+            <Form.Item name="protocol" label="协议" rules={[{ required: true }]}>
+              <Select options={[{ value: 'openai', label: 'OpenAI' }, { value: 'claude', label: 'Claude' }]} />
+            </Form.Item>
+            <Form.Item name="enabled" label="启用" valuePropName="checked">
+              <Switch />
+            </Form.Item>
+          </Form>
+        </Modal>
+
+        {/* Model Modal */}
+        <Modal
+          title={editingModel ? '编辑模型' : '添加模型'}
+          open={modelModalOpen}
+          onOk={handleModelSubmit}
+          onCancel={() => setModelModalOpen(false)}
+          confirmLoading={createModelMut.isPending || updateModelMut.isPending}
+        >
+          <Form form={modelForm} layout="vertical">
+            <Form.Item name="name" label="名称" rules={[{ required: true }]}>
+              <Input placeholder="发给上游的真实 model id" />
+            </Form.Item>
+            <Form.Item name="display_name" label="显示名" rules={[{ required: true }]}>
+              <Input />
+            </Form.Item>
+            <Form.Item name="provider_id" label="API 源" rules={[{ required: true }]}>
+              <Select
+                disabled
+                options={(providers ?? []).filter((p) => p.enabled).map((p) => ({ value: p.id, label: p.name }))}
+              />
+            </Form.Item>
+            <Form.Item name="description" label="描述">
+              <Input.TextArea placeholder="给判定模型看的描述" />
+            </Form.Item>
+            <Form.Item name="enabled" label="启用" valuePropName="checked">
+              <Switch />
+            </Form.Item>
+          </Form>
+        </Modal>
+
+        {/* Model Test Modal */}
+        <Modal
+          title="模型测试"
+          open={modelTestOpen}
+          footer={<Button onClick={() => setModelTestOpen(false)}>关闭</Button>}
+          onCancel={() => setModelTestOpen(false)}
+        >
+          {modelTestLoading && <p>正在测试...</p>}
+          {modelTestResult && (
+            <Result
+              status={modelTestResult.ok ? 'success' : 'error'}
+              title={modelTestResult.ok ? '模型可用' : '模型不可用'}
+              subTitle={modelTestResult.ok ? `耗时 ${modelTestResult.latency_ms}ms` : (modelTestResult.error ?? `HTTP ${modelTestResult.status}`)}
+            />
+          )}
+        </Modal>
+      </div>
     </div>
   )
 }

@@ -56,6 +56,9 @@ func (a *App) handleListProviders(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+	for i := range ps {
+		ps[i].HasAPIKey = ps[i].APIKey != ""
+	}
 	c.JSON(http.StatusOK, gin.H{"data": ps})
 }
 
@@ -78,6 +81,7 @@ func (a *App) handleCreateProvider(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+	p.HasAPIKey = p.APIKey != ""
 	c.JSON(http.StatusOK, p)
 }
 
@@ -104,6 +108,7 @@ func (a *App) handleUpdateProvider(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+	p.HasAPIKey = p.APIKey != ""
 	c.JSON(http.StatusOK, p)
 }
 
@@ -134,18 +139,18 @@ func (a *App) handleTestProvider(c *gin.Context) {
 		return
 	}
 	apiKey, _ := store.Decrypt(a.CryptoKey, p.APIKey)
-	status, err := a.Dispatcher.TestConnect(p.BaseURL, apiKey, p.Protocol)
+	status, respBody, err := a.Dispatcher.TestConnect(p.BaseURL, apiKey, p.Protocol)
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{"ok": false, "status": status, "error": err.Error()})
 		return
 	}
 	// I6: ok is true only for 2xx responses; any other status is reported with
-	// a generic "HTTP <status>" error.
+	// a generic "HTTP <status>" error plus the upstream body for diagnostics.
 	if status >= 200 && status < 300 {
 		c.JSON(http.StatusOK, gin.H{"ok": true, "status": status})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"ok": false, "status": status, "error": fmt.Sprintf("HTTP %d", status)})
+	c.JSON(http.StatusOK, gin.H{"ok": false, "status": status, "error": fmt.Sprintf("HTTP %d: %s", status, respBody)})
 }
 
 func (a *App) handleTestModel(c *gin.Context) {
@@ -166,7 +171,7 @@ func (a *App) handleTestModel(c *gin.Context) {
 	defer cancel()
 
 	start := time.Now()
-	status, err := a.Dispatcher.TestModelCtx(ctx, prov.BaseURL, apiKey, prov.Protocol, m.Name)
+	status, respBody, err := a.Dispatcher.TestModelCtx(ctx, prov.BaseURL, apiKey, prov.Protocol, m.Name)
 	latency := time.Since(start).Milliseconds()
 
 	if err != nil {
@@ -186,7 +191,7 @@ func (a *App) handleTestModel(c *gin.Context) {
 		"latency_ms": latency,
 	}
 	if !ok {
-		resp["error"] = fmt.Sprintf("HTTP %d", status)
+		resp["error"] = fmt.Sprintf("HTTP %d: %s", status, respBody)
 	}
 	c.JSON(http.StatusOK, resp)
 }
@@ -268,7 +273,7 @@ func (a *App) handleSetJudge(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
-// ---- Routing config ----
+// ---- Routing config (includes gateway token) ----
 
 func (a *App) handleGetRouting(c *gin.Context) {
 	rc, err := a.Store.GetRoutingConfig()
@@ -276,20 +281,49 @@ func (a *App) handleGetRouting(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, rc)
+	c.JSON(http.StatusOK, gin.H{
+		"id":                  rc.ID,
+		"judge_model_id":      rc.JudgeModelID,
+		"default_model_id":    rc.DefaultModelID,
+		"judge_max_input_chars": rc.JudgeMaxInputChars,
+		"gateway_token":       a.GatewayTokenValue(),
+	})
 }
 
 func (a *App) handleUpdateRouting(c *gin.Context) {
-	var rc store.RoutingConfig
-	if err := c.ShouldBindJSON(&rc); err != nil {
+	var body struct {
+		JudgeModelID       *uint  `json:"judge_model_id"`
+		DefaultModelID     *uint  `json:"default_model_id"`
+		JudgeMaxInputChars int    `json:"judge_max_input_chars"`
+		GatewayToken       string `json:"gateway_token"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
+	}
+	rc := store.RoutingConfig{
+		ID:                 1,
+		JudgeModelID:       body.JudgeModelID,
+		DefaultModelID:     body.DefaultModelID,
+		JudgeMaxInputChars: body.JudgeMaxInputChars,
 	}
 	if err := a.Store.UpdateRoutingConfig(&rc); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, rc)
+	if body.GatewayToken != "" {
+		if err := a.SetGatewayToken(body.GatewayToken); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"id":                  rc.ID,
+		"judge_model_id":      rc.JudgeModelID,
+		"default_model_id":    rc.DefaultModelID,
+		"judge_max_input_chars": rc.JudgeMaxInputChars,
+		"gateway_token":       a.GatewayTokenValue(),
+	})
 }
 
 // ---- Logs & stats ----

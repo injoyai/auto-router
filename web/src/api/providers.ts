@@ -6,6 +6,8 @@ export interface Provider {
   base_url: string
   /** 仅用于请求体；后端 Provider.APIKey 标记 json:"-"，响应中不会返回。 */
   api_key?: string
+  /** 后端返回，表示是否已保存 API Key */
+  has_api_key?: boolean
   protocol: string
   enabled: boolean
 }
