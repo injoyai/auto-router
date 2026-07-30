@@ -2,8 +2,7 @@ import { Routes, Route, Navigate } from 'react-router-dom'
 import Layout from './components/Layout'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
-import Providers from './pages/Providers'
-import Models from './pages/Models'
+import Sources from './pages/Sources'
 import Routing from './pages/Routing'
 import Logs from './pages/Logs'
 
@@ -26,8 +25,7 @@ export default function App() {
         }
       >
         <Route index element={<Dashboard />} />
-        <Route path="providers" element={<Providers />} />
-        <Route path="models" element={<Models />} />
+        <Route path="sources" element={<Sources />} />
         <Route path="routing" element={<Routing />} />
         <Route path="logs" element={<Logs />} />
       </Route>

@@ -2,8 +2,7 @@ import { Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { Layout as AntLayout, Menu, Button } from 'antd'
 import {
   DashboardOutlined,
-  ApiOutlined,
-  RobotOutlined,
+  AppstoreOutlined,
   SettingOutlined,
   FileTextOutlined,
   LogoutOutlined,
@@ -13,8 +12,7 @@ const { Sider, Content } = AntLayout
 
 const menuItems = [
   { key: '/', icon: <DashboardOutlined />, label: '仪表盘' },
-  { key: '/providers', icon: <ApiOutlined />, label: 'API 源' },
-  { key: '/models', icon: <RobotOutlined />, label: '模型' },
+  { key: '/sources', icon: <AppstoreOutlined />, label: '模型管理' },
   { key: '/routing', icon: <SettingOutlined />, label: '路由配置' },
   { key: '/logs', icon: <FileTextOutlined />, label: '日志' },
 ]
