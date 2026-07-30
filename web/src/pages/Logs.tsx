@@ -77,6 +77,10 @@ export default function Logs() {
       render: (v: number) => v > 0 ? <Tag color="orange">{v}</Tag> : '-',
     },
     {
+      title: 'Tokens', dataIndex: 'total_tokens', key: 'total_tokens', width: 90,
+      render: (v: number) => v > 0 ? v : '-',
+    },
+    {
       title: '错误', dataIndex: 'error', key: 'error', width: 200, ellipsis: true,
       render: (v: string) => v ? <span style={{ color: '#f43f5e' }}>{v}</span> : '-',
     },
