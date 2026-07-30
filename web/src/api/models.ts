@@ -32,3 +32,15 @@ export async function deleteModel(id: number): Promise<void> {
 export async function setJudgeModel(id: number): Promise<void> {
   await apiClient.post(`/admin/models/${id}/judge`)
 }
+
+export interface ModelTestResult {
+  ok: boolean
+  status: number
+  latency_ms: number
+  error?: string
+}
+
+export async function testModel(id: number): Promise<ModelTestResult> {
+  const { data } = await apiClient.post(`/admin/models/${id}/test`)
+  return data
+}
