@@ -43,11 +43,13 @@ func (a *App) handleAdminLogin(c *gin.Context) {
 // 以确保响应中不暴露密钥，但也导致 ShouldBindJSON 无法接收 api_key 字段。
 // 因此用独立输入结构体接收，再映射到 store.Provider。
 type providerInput struct {
-	Name     string `json:"name"`
-	BaseURL  string `json:"base_url"`
-	APIKey   string `json:"api_key"`
-	Protocol string `json:"protocol"`
-	Enabled  bool   `json:"enabled"`
+	Name           string `json:"name"`
+	BaseURL        string `json:"base_url"`
+	APIKey         string `json:"api_key"`
+	Protocol       string `json:"protocol"`
+	Enabled        bool   `json:"enabled"`
+	RetryMax       int    `json:"retry_max"`
+	RetryBackoffMs int    `json:"retry_backoff_ms"`
 }
 
 func (a *App) handleListProviders(c *gin.Context) {
@@ -69,10 +71,12 @@ func (a *App) handleCreateProvider(c *gin.Context) {
 		return
 	}
 	p := store.Provider{
-		Name:     in.Name,
-		BaseURL:  in.BaseURL,
-		Protocol: in.Protocol,
-		Enabled:  in.Enabled,
+		Name:           in.Name,
+		BaseURL:        in.BaseURL,
+		Protocol:       in.Protocol,
+		Enabled:        in.Enabled,
+		RetryMax:       in.RetryMax,
+		RetryBackoffMs: in.RetryBackoffMs,
 	}
 	if in.APIKey != "" {
 		p.APIKey = store.Encrypt(a.CryptoKey, in.APIKey)
@@ -101,6 +105,8 @@ func (a *App) handleUpdateProvider(c *gin.Context) {
 	p.BaseURL = in.BaseURL
 	p.Protocol = in.Protocol
 	p.Enabled = in.Enabled
+	p.RetryMax = in.RetryMax
+	p.RetryBackoffMs = in.RetryBackoffMs
 	if in.APIKey != "" {
 		p.APIKey = store.Encrypt(a.CryptoKey, in.APIKey)
 	}
