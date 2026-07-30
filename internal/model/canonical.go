@@ -86,6 +86,7 @@ type Delta struct {
 type Chunk struct {
 	Model   string        `json:"model"`
 	Choices []ChunkChoice `json:"choices"`
+	Usage   *Usage        `json:"usage,omitempty"`
 }
 
 type ChunkChoice struct {
