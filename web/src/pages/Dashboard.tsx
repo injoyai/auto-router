@@ -51,8 +51,14 @@ export default function Dashboard() {
 
   const activeModelCount = models?.filter((m) => m.enabled).length ?? 0
 
+  const reasonLabels: Record<string, string> = {
+    override: '指定路由',
+    judge: '智能路由',
+    fallback: '兜底路由',
+    test: '测试',
+  }
   const pieData = (stats?.by_reason ?? []).map((r) => ({
-    type: r.Reason,
+    type: reasonLabels[r.Reason] ?? r.Reason,
     value: r.Count,
   }))
 

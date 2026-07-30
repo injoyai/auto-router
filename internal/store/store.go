@@ -1,6 +1,9 @@
 package store
 
 import (
+	"os"
+	"path/filepath"
+
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -11,6 +14,15 @@ type Store struct {
 }
 
 func Open(path string) (*Store, error) {
+	// Ensure the parent directory exists for file-backed databases. Skipped
+	// for ":memory:" (no directory) and for relative paths without a dir.
+	if path != ":memory:" {
+		if dir := filepath.Dir(path); dir != "" && dir != "." {
+			if err := os.MkdirAll(dir, 0o755); err != nil {
+				return nil, err
+			}
+		}
+	}
 	db, err := gorm.Open(sqlite.Open(path), &gorm.Config{
 		Logger: logger.Default.LogMode(logger.Warn),
 	})

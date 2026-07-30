@@ -28,7 +28,19 @@ func BuildUpstreamRequest(req *model.ChatRequest) (map[string]any, error) {
 		}
 	}
 	body["model"] = req.Model
-	body["messages"] = req.Messages
+	// Same-protocol (openai→openai): passthrough the original messages so
+	// multimodal content (image_url blocks etc.) is preserved. The canonical
+	// string form would drop non-text blocks. Cross-protocol clients (Claude)
+	// use the rebuilt canonical messages to avoid leaking Claude-specific shapes.
+	if req.ClientFmt == "openai" {
+		if rawMsgs, ok := req.Raw["messages"]; ok {
+			body["messages"] = rawMsgs
+		} else {
+			body["messages"] = req.Messages
+		}
+	} else {
+		body["messages"] = req.Messages
+	}
 	body["stream"] = req.Stream
 	if len(req.Tools) > 0 {
 		body["tools"] = req.Tools

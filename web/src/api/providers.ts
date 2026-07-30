@@ -17,6 +17,7 @@ export interface Provider {
 export interface TestResult {
   ok: boolean
   status: number
+  latency_ms?: number
   error?: string
 }
 

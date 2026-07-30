@@ -66,7 +66,7 @@ func NewApp(cfg Config, st *store.Store, cryptoKey []byte, gatewayToken, adminTo
 	engine := routing.New(st, &lazyJudge{st: st, disp: disp, key: cryptoKey})
 
 	r := gin.New()
-	r.Use(gin.Recovery())
+	r.Use(gin.Logger(), gin.Recovery())
 	r.GET("/health", func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"status": "ok"}) })
 
 	// Dev mode: permissive CORS so the Vite dev server can call the backend.

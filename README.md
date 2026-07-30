@@ -9,7 +9,7 @@ go build -o auto-router ./cmd/router
 ./auto-router
 ```
 
-首次启动会在 `auto-router.db` 中生成并打印 gateway token 和 admin token。
+首次启动会在 `./data/database/auto-router.db` 中生成并打印 gateway token 和 admin token。
 
 ## 配置
 
@@ -20,20 +20,20 @@ go build -o auto-router ./cmd/router
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
 | `LISTEN_ADDR` | `:8080` | 监听地址 |
-| `DB_PATH` | `auto-router.db` | SQLite 路径 |
+| `DB_PATH` | `./data/database/auto-router.db` | SQLite 路径 |
 | `GATEWAY_TOKEN` | 自动生成 | 客户端访问网关的 token(可覆盖) |
 | `ADMIN_TOKEN` | 自动生成 | 管理后台 token(可覆盖) |
-| `CONFIG_FILE` | `config.yaml` | 配置文件路径(不存在则忽略) |
+| `CONFIG_FILE` | `./config/config.yaml` | 配置文件路径(不存在则忽略) |
 | `DEV` | (未设置) | 任意非空值开启开发模式(CORS 放开) |
 
 ### 配置文件(YAML)
 
-可选。默认读取工作目录下的 `config.yaml`,也可用 `CONFIG_FILE` 指定路径。文件不存在时忽略,字段缺失时回退到环境变量/默认值。
+可选。默认读取工作目录下的 `./config/config.yaml`,也可用 `CONFIG_FILE` 指定路径。文件不存在时忽略,字段缺失时回退到环境变量/默认值。
 
 ```yaml
 listen_addr: ":8080"
-db_path: "auto-router.db"
-admin_token: "your-admin-token"
+db_path: "./data/database/auto-router.db"
+password: "your-admin-password"   # 管理后台登录密码(也可用 admin_token,二者等价,admin_token 优先)
 gateway_token: "your-gateway-token"
 dev: false
 ```

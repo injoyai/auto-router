@@ -8,6 +8,15 @@ const reasonColors: Record<string, string> = {
   override: 'blue',
   judge: 'geekblue',
   fallback: 'orange',
+  test: 'purple',
+}
+
+// 后端 route_reason 为英文,界面展示成中文(value 仍用英文传给后端过滤)
+const reasonLabels: Record<string, string> = {
+  override: '指定路由',
+  judge: '智能路由',
+  fallback: '兜底路由',
+  test: '测试',
 }
 
 export default function Logs() {
@@ -17,14 +26,18 @@ export default function Logs() {
   const [model, setModel] = useState<string | undefined>()
 
   const [filters, setFilters] = useState({ reason: undefined as string | undefined, model: undefined as string | undefined })
+  // searchNonce forces a refetch on every "查询" click even when filters are
+  // unchanged (React Query skips re-fetching when the queryKey is identical).
+  const [searchNonce, setSearchNonce] = useState(0)
 
   const { data, isLoading } = useQuery({
-    queryKey: ['logs', page, pageSize, filters.reason, filters.model],
+    queryKey: ['logs', page, pageSize, filters.reason, filters.model, searchNonce],
     queryFn: () => listLogs({ page, page_size: pageSize, reason: filters.reason, model: filters.model }),
   })
 
   const handleSearch = () => {
     setFilters({ reason, model })
+    setSearchNonce((n) => n + 1)
     setPage(1)
   }
 
@@ -32,6 +45,7 @@ export default function Logs() {
     setReason(undefined)
     setModel(undefined)
     setFilters({ reason: undefined, model: undefined })
+    setSearchNonce((n) => n + 1)
     setPage(1)
   }
 
@@ -48,7 +62,7 @@ export default function Logs() {
     { title: '路由模型', dataIndex: 'routed_model', key: 'routed_model', width: 120 },
     {
       title: '路由原因', dataIndex: 'route_reason', key: 'route_reason', width: 100,
-      render: (v: string) => <Tag color={reasonColors[v] ?? 'default'}>{v}</Tag>,
+      render: (v: string) => <Tag color={reasonColors[v] ?? 'default'}>{reasonLabels[v] ?? v}</Tag>,
     },
     {
       title: '状态', dataIndex: 'status', key: 'status', width: 70,
@@ -81,9 +95,10 @@ export default function Logs() {
             value={reason}
             onChange={setReason}
             options={[
-              { value: 'override', label: 'override' },
-              { value: 'judge', label: 'judge' },
-              { value: 'fallback', label: 'fallback' },
+              { value: 'override', label: '指定路由' },
+              { value: 'judge', label: '智能路由' },
+              { value: 'fallback', label: '兜底路由' },
+              { value: 'test', label: '测试' },
             ]}
           />
           <Input.Search
@@ -92,6 +107,7 @@ export default function Logs() {
             style={{ width: 200 }}
             value={model}
             onChange={(e) => setModel(e.target.value)}
+            onSearch={handleSearch}
           />
           <Button type="primary" onClick={handleSearch}>查询</Button>
           <Button onClick={handleReset}>重置</Button>

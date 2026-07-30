@@ -9,9 +9,13 @@ auto-router.exe
 *.db-wal
 *.db-shm
 
-# Local config (may contain tokens)
+# Local data directory (default SQLite location)
+/data/
+
+# Local config (may contain tokens / passwords)
 config.yaml
 config.yml
+/config/
 
 # Build output
 /dist/
