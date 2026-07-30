@@ -3,18 +3,21 @@ package store
 import "time"
 
 type RequestLog struct {
-	ID             uint      `gorm:"primaryKey" json:"id"`
-	SessionID      string    `json:"session_id"`
-	ClientProtocol string    `json:"client_protocol"`
-	RequestedModel string    `json:"requested_model"`
-	RoutedModel    string    `json:"routed_model"`
-	RouteReason    string    `json:"route_reason"`
-	JudgeRaw       string    `json:"judge_raw"`
-	Status         int       `json:"status"`
-	LatencyMs      int64     `json:"latency_ms"`
-	Error          string    `json:"error"`
-	RetryCount    int       `json:"retry_count"`
-	CreatedAt      time.Time `json:"created_at"`
+	ID               uint      `gorm:"primaryKey" json:"id"`
+	SessionID        string    `json:"session_id"`
+	ClientProtocol   string    `json:"client_protocol"`
+	RequestedModel   string    `json:"requested_model"`
+	RoutedModel      string    `json:"routed_model"`
+	RouteReason      string    `json:"route_reason"`
+	JudgeRaw         string    `json:"judge_raw"`
+	Status           int       `json:"status"`
+	LatencyMs        int64     `json:"latency_ms"`
+	Error            string    `json:"error"`
+	RetryCount       int       `json:"retry_count"`
+	PromptTokens     int       `json:"prompt_tokens"`
+	CompletionTokens int       `json:"completion_tokens"`
+	TotalTokens      int       `json:"total_tokens"`
+	CreatedAt        time.Time `json:"created_at"`
 }
 
 func (s *Store) CreateLog(l *RequestLog) error {
