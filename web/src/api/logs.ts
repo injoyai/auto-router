@@ -12,6 +12,9 @@ export interface RequestLog {
   latency_ms: number
   error: string
   retry_count: number
+  prompt_tokens: number
+  completion_tokens: number
+  total_tokens: number
   created_at: string
 }
 
@@ -29,9 +32,21 @@ export interface ListLogsResponse {
   page_size: number
 }
 
+export interface TokenStatRow {
+  model: string
+  provider: string
+  count: number
+  prompt_tokens: number
+  completion_tokens: number
+  total_tokens: number
+}
+
 export interface Stats {
   total: number
   by_reason: { Reason: string; Count: number }[]
+  tokens: { total: number; prompt: number; completion: number }
+  by_model: TokenStatRow[]
+  by_provider: TokenStatRow[]
 }
 
 export async function listLogs(params: ListLogsParams): Promise<ListLogsResponse> {
