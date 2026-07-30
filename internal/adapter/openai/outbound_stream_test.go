@@ -52,3 +52,25 @@ func TestEncodeChunk(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, `data: {"model":"gpt-4","choices":[{"index":0,"delta":{"content":"x"}}]}`, string(b))
 }
+
+func TestParseSSELineWithUsage(t *testing.T) {
+	// OpenAI 流式最终 chunk 携带 usage
+	line := `data: {"id":"chatcmpl-1","object":"chat.completion.chunk","created":1,"model":"gpt-4o","choices":[],"usage":{"prompt_tokens":10,"completion_tokens":20,"total_tokens":30}}`
+	ch, done, err := ParseSSELine(line)
+	assert.NoError(t, err)
+	assert.False(t, done)
+	assert.NotNil(t, ch, "chunk should not be nil")
+	assert.NotNil(t, ch.Usage, "Usage should be parsed")
+	assert.Equal(t, 10, ch.Usage.PromptTokens)
+	assert.Equal(t, 20, ch.Usage.CompletionTokens)
+	assert.Equal(t, 30, ch.Usage.TotalTokens)
+}
+
+func TestParseSSELineNoUsage(t *testing.T) {
+	// 普通 delta chunk 没有 usage
+	line := `data: {"id":"chatcmpl-1","object":"chat.completion.chunk","created":1,"model":"gpt-4o","choices":[{"index":0,"delta":{"content":"hi"},"finish_reason":null}]}`
+	ch, _, err := ParseSSELine(line)
+	assert.NoError(t, err)
+	assert.NotNil(t, ch)
+	assert.Nil(t, ch.Usage, "Usage should be nil for non-final chunk")
+}
