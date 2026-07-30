@@ -66,8 +66,8 @@ func adminToken(t *testing.T, app *testApp) string {
 }
 
 // TestTestProviderOkLogic (I6) verifies ok is true only for 2xx and that a
-// non-2xx status yields ok=false with a generic "HTTP <status>" error (and the
-// upstream body is not leaked to the client).
+// non-2xx status yields ok=false with an "HTTP <status>: <body>" error that
+// surfaces the upstream response body for diagnostics.
 func TestTestProviderOkLogic(t *testing.T) {
 	// 2xx -> ok=true
 	app := newTestApp(t, startTestConnectUpstream(t, http.StatusOK))
@@ -82,7 +82,7 @@ func TestTestProviderOkLogic(t *testing.T) {
 	assert.Equal(t, true, res["ok"])
 	assert.EqualValues(t, http.StatusOK, res["status"])
 
-	// 401 -> ok=false, generic error, body not leaked
+	// 401 -> ok=false, error includes status + upstream body
 	app2 := newTestApp(t, startTestConnectUpstream(t, http.StatusUnauthorized))
 	tok2 := adminToken(t, app2)
 	req = httptest.NewRequest(http.MethodPost, "/admin/providers/1/test", nil)
@@ -93,8 +93,8 @@ func TestTestProviderOkLogic(t *testing.T) {
 	_ = json.Unmarshal(w.Body.Bytes(), &res)
 	assert.Equal(t, false, res["ok"])
 	assert.EqualValues(t, http.StatusUnauthorized, res["status"])
-	assert.Equal(t, "HTTP 401", res["error"])
-	assert.NotContains(t, w.Body.String(), "internal body must not leak")
+	assert.Contains(t, res["error"], "HTTP 401")
+	assert.Contains(t, res["error"], "internal body must not leak")
 }
 
 // TestDeleteReferencedRejected (I10) verifies that deleting a provider with

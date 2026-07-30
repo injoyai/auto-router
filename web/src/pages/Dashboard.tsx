@@ -1,5 +1,11 @@
 import { Card, Col, Row, Statistic, Spin } from 'antd'
 import { Pie, Column } from '@ant-design/charts'
+import {
+  ThunderboltOutlined,
+  CheckCircleOutlined,
+  AppstoreOutlined,
+  ClockCircleOutlined,
+} from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
 import { getStats, listLogs } from '../api/logs'
 import { listModels } from '../api/models'
@@ -26,8 +32,8 @@ export default function Dashboard() {
 
   if (statsError || logsError || modelsError) {
     return (
-      <Card className="mono-card">
-        <p style={{ color: '#ef4444', textAlign: 'center', padding: 40 }}>
+      <Card className="aurora-card">
+        <p style={{ color: '#d05a4a', textAlign: 'center', padding: 40 }}>
           数据加载失败，请稍后重试
         </p>
       </Card>
@@ -68,7 +74,7 @@ export default function Dashboard() {
     radius: 0.8,
     label: { type: 'outer' as const },
     legend: { position: 'bottom' as const },
-    color: ['#0d9488', '#14b8a6', '#5eead4', '#99f6e4', '#ccfbf1'],
+    color: ['#3a6b4d', '#c87a4a', '#d4a04c', '#5a9d6e', '#a89e85'],
   }
 
   const columnConfig = {
@@ -77,50 +83,56 @@ export default function Dashboard() {
     yField: 'count',
     label: { position: 'top' as const },
     xAxis: { label: { autoRotate: true, autoHide: false } },
-    color: '#0d9488',
-    columnStyle: { radius: [4, 4, 0, 0] },
+    color: '#3a6b4d',
+    columnStyle: { radius: [6, 6, 0, 0] },
   }
 
   return (
     <div>
+      <div className="page-title">仪表盘</div>
+      <div className="page-subtitle">实时监控你的 AI 网关运行状态</div>
       <Row gutter={[20, 20]} style={{ marginBottom: 20 }}>
-        <Col span={6} className="mono-fade-in mono-fade-in-1">
-          <Card className="stat-card">
+        <Col span={6} className="aurora-fade-in aurora-fade-in-1">
+          <Card className="stat-card stat-card--indigo">
+            <div className="stat-card-icon"><ThunderboltOutlined /></div>
             <Statistic title="总请求数" value={totalCount} />
           </Card>
         </Col>
-        <Col span={6} className="mono-fade-in mono-fade-in-2">
-          <Card className="stat-card">
+        <Col span={6} className="aurora-fade-in aurora-fade-in-2">
+          <Card className="stat-card stat-card--mint">
+            <div className="stat-card-icon"><CheckCircleOutlined /></div>
             <Statistic title="成功率" value={successRate} suffix="%" />
           </Card>
         </Col>
-        <Col span={6} className="mono-fade-in mono-fade-in-3">
-          <Card className="stat-card">
+        <Col span={6} className="aurora-fade-in aurora-fade-in-3">
+          <Card className="stat-card stat-card--violet">
+            <div className="stat-card-icon"><AppstoreOutlined /></div>
             <Statistic title="活跃模型数" value={activeModelCount} />
           </Card>
         </Col>
-        <Col span={6} className="mono-fade-in mono-fade-in-4">
-          <Card className="stat-card">
+        <Col span={6} className="aurora-fade-in aurora-fade-in-4">
+          <Card className="stat-card stat-card--amber">
+            <div className="stat-card-icon"><ClockCircleOutlined /></div>
             <Statistic title="平均延迟" value={avgLatency} suffix="ms" />
           </Card>
         </Col>
       </Row>
       <Row gutter={20}>
-        <Col span={12} className="mono-fade-in mono-fade-in-3">
-          <Card title="路由原因分布" className="mono-card">
+        <Col span={12} className="aurora-fade-in aurora-fade-in-3">
+          <Card title="路由原因分布" className="aurora-card">
             {pieData.length > 0 ? (
               <Pie {...pieConfig} />
             ) : (
-              <p style={{ color: '#a3a3a3', textAlign: 'center', padding: 40 }}>暂无数据</p>
+              <p style={{ color: '#a89e85', textAlign: 'center', padding: 40 }}>暂无数据</p>
             )}
           </Card>
         </Col>
-        <Col span={12} className="mono-fade-in mono-fade-in-4">
-          <Card title="模型使用占比" className="mono-card">
+        <Col span={12} className="aurora-fade-in aurora-fade-in-4">
+          <Card title="模型使用占比" className="aurora-card">
             {columnData.length > 0 ? (
               <Column {...columnConfig} />
             ) : (
-              <p style={{ color: '#a3a3a3', textAlign: 'center', padding: 40 }}>暂无数据</p>
+              <p style={{ color: '#a89e85', textAlign: 'center', padding: 40 }}>暂无数据</p>
             )}
           </Card>
         </Col>

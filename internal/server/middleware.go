@@ -14,8 +14,12 @@ import (
 // I9: the token is compared in constant time to avoid timing side channels.
 // The error envelope is protocol-aware: /v1/messages returns the Claude
 // error shape, other gateway routes return the OpenAI error shape.
-func GatewayAuth(token string) gin.HandlerFunc {
+//
+// The token is read via tokenGetter on every request so that the gateway
+// token can be rotated at runtime without restarting the server.
+func GatewayAuth(tokenGetter func() string) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		token := tokenGetter()
 		h := c.GetHeader("Authorization")
 		ok := strings.HasPrefix(h, "Bearer ") && subtle.ConstantTimeCompare([]byte(strings.TrimPrefix(h, "Bearer ")), []byte(token)) == 1
 		if !ok {

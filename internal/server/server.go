@@ -4,7 +4,7 @@ import (
 	"io/fs"
 	"net/http"
 	"strings"
-	"time"
+	"sync"
 
 	"github.com/gin-gonic/gin"
 
@@ -27,6 +27,24 @@ type App struct {
 	CryptoKey    []byte
 	GatewayToken string
 	AdminToken   string
+
+	gwMu sync.RWMutex
+}
+
+// GatewayTokenValue returns the current gateway token in a thread-safe manner.
+func (a *App) GatewayTokenValue() string {
+	a.gwMu.RLock()
+	defer a.gwMu.RUnlock()
+	return a.GatewayToken
+}
+
+// SetGatewayToken updates the in-memory gateway token (thread-safe) and
+// persists it to the settings table so it survives restarts.
+func (a *App) SetGatewayToken(token string) error {
+	a.gwMu.Lock()
+	a.GatewayToken = token
+	a.gwMu.Unlock()
+	return a.Store.SetSetting(settingGatewayToken, token)
 }
 
 // NewRouter builds a minimal gin engine with just the /health endpoint.
@@ -76,7 +94,7 @@ func NewApp(cfg Config, st *store.Store, cryptoKey []byte, gatewayToken, adminTo
 		AdminToken:   adminToken,
 	}
 
-	v1 := r.Group("/v1", GatewayAuth(gatewayToken))
+	v1 := r.Group("/v1", GatewayAuth(app.GatewayTokenValue))
 	v1.POST("/chat/completions", app.handleChatCompletions)
 	v1.POST("/messages", app.handleMessages)
 	v1.GET("/models", app.handleListModels)
@@ -120,19 +138,6 @@ func (l *lazyJudge) Judge(judgeModel *store.Model, candidates []store.Model, use
 	}
 	apiKey, _ := store.Decrypt(l.key, prov.APIKey)
 	return routing.NewJudgeClient(l.disp, prov.BaseURL, apiKey, prov.Protocol).Judge(judgeModel, candidates, userText)
-}
-
-// StartSessionCleanup launches a goroutine that periodically deletes expired
-// sessions from the store. It is NOT auto-started by NewApp so tests can drive
-// it explicitly; main.go starts it for the real server.
-func StartSessionCleanup(st *store.Store, interval time.Duration) {
-	go func() {
-		t := time.NewTicker(interval)
-		defer t.Stop()
-		for range t.C {
-			_, _ = st.CleanExpiredSessions()
-		}
-	}()
 }
 
 // ServeSPA registers a NoRoute handler to serve the embedded React SPA.

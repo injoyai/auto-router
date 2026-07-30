@@ -28,7 +28,7 @@ func Open(path string) (*Store, error) {
 	if err := db.Exec("PRAGMA busy_timeout=5000").Error; err != nil {
 		return nil, err
 	}
-	if err := db.AutoMigrate(&Provider{}, &Model{}, &RoutingConfig{}, &Session{}, &RequestLog{}, &Setting{}); err != nil {
+	if err := db.AutoMigrate(&Provider{}, &Model{}, &RoutingConfig{}, &RequestLog{}, &Setting{}); err != nil {
 		return nil, err
 	}
 	// seed routing_config singleton row

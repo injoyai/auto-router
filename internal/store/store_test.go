@@ -17,13 +17,13 @@ func newTestStore(t *testing.T) *Store {
 
 func TestOpenAutoMigrates(t *testing.T) {
 	s := newTestStore(t)
-	err := s.DB.AutoMigrate(&Provider{}, &Model{}, &RoutingConfig{}, &Session{}, &RequestLog{}, &Setting{})
+	err := s.DB.AutoMigrate(&Provider{}, &Model{}, &RoutingConfig{}, &RequestLog{}, &Setting{})
 	assert.NoError(t, err)
 
 	// Tables exist and are queryable. Open() also seeds the routing_configs
 	// singleton row (ID=1), so it has 1 row; all others are empty.
 	var count int64
-	emptyTables := []string{"providers", "models", "sessions", "request_logs", "settings"}
+	emptyTables := []string{"providers", "models", "request_logs", "settings"}
 	for _, tbl := range emptyTables {
 		s.DB.Table(tbl).Count(&count)
 		assert.Equal(t, int64(0), count, "table %s should exist and be empty", tbl)

@@ -3,7 +3,6 @@ package main
 import (
 	"io/fs"
 	"log"
-	"time"
 
 	"auto-router/internal/config"
 	"auto-router/internal/server"
@@ -12,7 +11,10 @@ import (
 )
 
 func main() {
-	cfg := config.Load()
+	cfg, err := config.Load()
+	if err != nil {
+		log.Fatal(err)
+	}
 	st, err := store.Open(cfg.DBPath)
 	if err != nil {
 		log.Fatal(err)
@@ -28,7 +30,6 @@ func main() {
 		adminToken = cfg.AdminToken
 	}
 	app := server.NewApp(cfg, st, key, gwToken, adminToken)
-	server.StartSessionCleanup(st, time.Minute)
 
 	// Serve embedded React SPA (non-API requests fall back to index.html).
 	if webSub, err := fs.Sub(web.FS, "dist"); err == nil {

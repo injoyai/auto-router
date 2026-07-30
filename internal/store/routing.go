@@ -3,12 +3,10 @@ package store
 import "gorm.io/gorm"
 
 type RoutingConfig struct {
-	ID                       uint  `gorm:"primaryKey" json:"id"`
-	JudgeModelID             *uint `json:"judge_model_id"`
-	DefaultModelID           *uint `json:"default_model_id"`
-	EnableNextModelDirective bool  `gorm:"default:true" json:"enable_next_model_directive"`
-	SessionTTLSeconds        int   `gorm:"default:1800" json:"session_ttl_seconds"`
-	JudgeMaxInputChars       int   `gorm:"default:2000" json:"judge_max_input_chars"`
+	ID                 uint  `gorm:"primaryKey" json:"id"`
+	JudgeModelID       *uint `json:"judge_model_id"`
+	DefaultModelID     *uint `json:"default_model_id"`
+	JudgeMaxInputChars int   `gorm:"default:2000" json:"judge_max_input_chars"`
 }
 
 func (s *Store) GetRoutingConfig() (*RoutingConfig, error) {

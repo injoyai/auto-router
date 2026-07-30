@@ -9,6 +9,10 @@ auto-router.exe
 *.db-wal
 *.db-shm
 
+# Local config (may contain tokens)
+config.yaml
+config.yml
+
 # Build output
 /dist/
 

@@ -1,6 +1,11 @@
 package config
 
-import "os"
+import (
+	"fmt"
+	"os"
+
+	"gopkg.in/yaml.v3"
+)
 
 type Config struct {
 	ListenAddr   string
@@ -10,20 +15,59 @@ type Config struct {
 	DevMode      bool
 }
 
-func Load() Config {
-	c := Config{
-		ListenAddr:   getEnv("LISTEN_ADDR", ":8080"),
-		DBPath:       getEnv("DB_PATH", "auto-router.db"),
-		AdminToken:   os.Getenv("ADMIN_TOKEN"),
-		GatewayToken: os.Getenv("GATEWAY_TOKEN"),
-		DevMode:      os.Getenv("DEV") != "",
-	}
-	return c
+// fileConfig mirrors Config fields for the optional YAML config file.
+type fileConfig struct {
+	ListenAddr   string `yaml:"listen_addr"`
+	DBPath       string `yaml:"db_path"`
+	AdminToken   string `yaml:"admin_token"`
+	GatewayToken string `yaml:"gateway_token"`
+	DevMode      bool   `yaml:"dev"`
 }
 
-func getEnv(k, def string) string {
-	if v := os.Getenv(k); v != "" {
-		return v
+// Load builds Config with precedence: env var > config file > default.
+// The config file path is taken from the CONFIG_FILE env var, defaulting to
+// config.yaml in the working directory. A missing file is not an error.
+func Load() (Config, error) {
+	fc, err := loadFile(configFilePath())
+	if err != nil {
+		return Config{}, err
 	}
-	return def
+	return Config{
+		ListenAddr:   firstNonEmpty(os.Getenv("LISTEN_ADDR"), fc.ListenAddr, ":8080"),
+		DBPath:       firstNonEmpty(os.Getenv("DB_PATH"), fc.DBPath, "auto-router.db"),
+		AdminToken:   firstNonEmpty(os.Getenv("ADMIN_TOKEN"), fc.AdminToken),
+		GatewayToken: firstNonEmpty(os.Getenv("GATEWAY_TOKEN"), fc.GatewayToken),
+		DevMode:      os.Getenv("DEV") != "" || fc.DevMode,
+	}, nil
+}
+
+func configFilePath() string {
+	if p := os.Getenv("CONFIG_FILE"); p != "" {
+		return p
+	}
+	return "config.yaml"
+}
+
+func loadFile(path string) (fileConfig, error) {
+	var fc fileConfig
+	b, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return fc, nil // no config file is fine
+		}
+		return fc, fmt.Errorf("read config file %s: %w", path, err)
+	}
+	if err := yaml.Unmarshal(b, &fc); err != nil {
+		return fc, fmt.Errorf("parse config file %s: %w", path, err)
+	}
+	return fc, nil
+}
+
+func firstNonEmpty(vals ...string) string {
+	for _, v := range vals {
+		if v != "" {
+			return v
+		}
+	}
+	return ""
 }

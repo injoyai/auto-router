@@ -4,9 +4,8 @@ export interface RoutingConfig {
   id: number
   judge_model_id: number | null
   default_model_id: number | null
-  enable_next_model_directive: boolean
-  session_ttl_seconds: number
   judge_max_input_chars: number
+  gateway_token: string
 }
 
 export async function getRoutingConfig(): Promise<RoutingConfig> {

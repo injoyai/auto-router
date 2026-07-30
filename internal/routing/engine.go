@@ -3,7 +3,6 @@ package routing
 import (
 	"fmt"
 	"log"
-	"time"
 
 	"auto-router/internal/model"
 	"auto-router/internal/store"
@@ -16,8 +15,6 @@ type StoreDeps interface {
 	GetModel(id uint) (*store.Model, error)
 	GetModelByName(name string) (*store.Model, error)
 	ListEnabledModels() ([]store.Model, error)
-	GetSession(id string) (*store.Session, error)
-	SetNextModel(id, model string, ttl time.Duration) error
 }
 
 // Compile-time guarantee that *store.Store satisfies StoreDeps.
@@ -31,7 +28,7 @@ type JudgeClient interface {
 type Decision struct {
 	ModelName string
 	Model     *store.Model
-	Reason    string // override | session | judge | fallback
+	Reason    string // override | judge | fallback
 	JudgeRaw  string
 }
 
@@ -53,16 +50,7 @@ func (e *Engine) Route(req *model.ChatRequest) (*Decision, error) {
 		}
 	}
 
-	// 2. Session next-model
-	if req.SessionID != "" {
-		if sess, err := e.Store.GetSession(req.SessionID); err == nil && sess != nil && sess.NextModel != "" {
-			if m, err := e.Store.GetModelByName(sess.NextModel); err == nil && m != nil && m.Enabled {
-				return &Decision{ModelName: m.Name, Model: m, Reason: "session"}, nil
-			}
-		}
-	}
-
-	// 3. Judge
+	// 2. Judge
 	rc, err := e.Store.GetRoutingConfig()
 	if err != nil {
 		return nil, fmt.Errorf("get routing config: %w", err)
@@ -97,7 +85,7 @@ func (e *Engine) Route(req *model.ChatRequest) (*Decision, error) {
 		}
 	}
 
-	// 4. Fallback to default model
+	// 3. Fallback to default model
 	if rc.DefaultModelID != nil {
 		if m, err := e.Store.GetModel(*rc.DefaultModelID); err == nil && m != nil {
 			return &Decision{ModelName: m.Name, Model: m, Reason: "fallback", JudgeRaw: judgeRaw}, nil

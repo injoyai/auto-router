@@ -39,12 +39,10 @@ func newTestApp(t *testing.T, upstreamURL string) *testApp {
 		t.Fatal(err)
 	}
 	if err := st.UpdateRoutingConfig(&store.RoutingConfig{
-		ID:                       1,
-		JudgeModelID:             &judge.ID,
-		DefaultModelID:           &target.ID,
-		EnableNextModelDirective: true,
-		SessionTTLSeconds:        1800,
-		JudgeMaxInputChars:       2000,
+		ID:                 1,
+		JudgeModelID:       &judge.ID,
+		DefaultModelID:     &target.ID,
+		JudgeMaxInputChars: 2000,
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -79,12 +77,10 @@ func newTestAppWithProtocol(t *testing.T, upstreamURL, protocol string) *testApp
 		t.Fatal(err)
 	}
 	if err := st.UpdateRoutingConfig(&store.RoutingConfig{
-		ID:                       1,
-		JudgeModelID:             &judge.ID,
-		DefaultModelID:           &target.ID,
-		EnableNextModelDirective: true,
-		SessionTTLSeconds:        1800,
-		JudgeMaxInputChars:       2000,
+		ID:                 1,
+		JudgeModelID:       &judge.ID,
+		DefaultModelID:     &target.ID,
+		JudgeMaxInputChars: 2000,
 	}); err != nil {
 		t.Fatal(err)
 	}
