@@ -109,7 +109,11 @@ func (a *App) handleChat(c *gin.Context, clientFmt string, parseInbound func(map
 		}
 		c.Data(http.StatusOK, "application/json", b)
 	}
-	a.writeLog(req, dec, requestedModel, status, time.Since(start), errMsg, retryCount)
+	var usage *model.Usage
+	if resp != nil {
+		usage = &resp.Usage
+	}
+	a.writeLog(req, dec, requestedModel, status, time.Since(start), errMsg, retryCount, usage)
 }
 
 func (a *App) handleChatCompletions(c *gin.Context) {
@@ -129,6 +133,7 @@ func (a *App) streamResponse(c *gin.Context, baseURL, apiKey, protocol string, b
 	errMsg := ""
 
 	// Choose encoder based on CLIENT protocol
+	var usage *model.Usage
 	var enc chunkEncoder
 	if req.ClientFmt == "claude" {
 		enc = &claudeChunkEncoder{enc: claude.NewStreamEncoder(dec.ModelName)}
@@ -137,6 +142,9 @@ func (a *App) streamResponse(c *gin.Context, baseURL, apiKey, protocol string, b
 	}
 
 	retryCount, streamErr := a.Dispatcher.CallStreamWithRetry(baseURL, apiKey, protocol, body, retryMax, backoffMs, func(ch *model.Chunk) error {
+		if ch != nil && ch.Usage != nil {
+			usage = ch.Usage
+		}
 		if ch == nil {
 			c.Writer.Write(enc.Finish())
 			flusher.Flush()
@@ -151,21 +159,30 @@ func (a *App) streamResponse(c *gin.Context, baseURL, apiKey, protocol string, b
 		errMsg = streamErr.Error()
 		writeGatewayError(c, status, req.ClientFmt, streamErr.Error(), "upstream_error")
 	}
-	a.writeLog(req, dec, requestedModel, status, time.Since(start), errMsg, retryCount)
+	a.writeLog(req, dec, requestedModel, status, time.Since(start), errMsg, retryCount, usage)
 }
 
-func (a *App) writeLog(req *model.ChatRequest, dec *routing.Decision, requestedModel string, status int, dur time.Duration, errMsg string, retryCount int) {
+func (a *App) writeLog(req *model.ChatRequest, dec *routing.Decision, requestedModel string, status int, dur time.Duration, errMsg string, retryCount int, usage *model.Usage) {
+	var prompt, completion, total int
+	if usage != nil {
+		prompt = usage.PromptTokens
+		completion = usage.CompletionTokens
+		total = usage.TotalTokens
+	}
 	_ = a.Store.CreateLog(&store.RequestLog{
-		SessionID:      req.SessionID,
-		ClientProtocol: req.ClientFmt,
-		RequestedModel: requestedModel,
-		RoutedModel:    dec.ModelName,
-		RouteReason:    dec.Reason,
-		JudgeRaw:       dec.JudgeRaw,
-		Status:         status,
-		LatencyMs:      dur.Milliseconds(),
-		Error:          errMsg,
-		RetryCount:     retryCount,
+		SessionID:        req.SessionID,
+		ClientProtocol:   req.ClientFmt,
+		RequestedModel:   requestedModel,
+		RoutedModel:      dec.ModelName,
+		RouteReason:      dec.Reason,
+		JudgeRaw:         dec.JudgeRaw,
+		Status:           status,
+		LatencyMs:        dur.Milliseconds(),
+		Error:            errMsg,
+		RetryCount:       retryCount,
+		PromptTokens:     prompt,
+		CompletionTokens: completion,
+		TotalTokens:      total,
 	})
 }
 
