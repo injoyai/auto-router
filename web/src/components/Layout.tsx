@@ -7,6 +7,7 @@ import {
   FileTextOutlined,
   LogoutOutlined,
   ThunderboltFilled,
+  FireOutlined,
 } from '@ant-design/icons'
 
 const { Sider, Content } = AntLayout
@@ -16,6 +17,7 @@ const menuItems = [
   { key: '/sources', icon: <AppstoreOutlined />, label: '模型管理' },
   { key: '/routing', icon: <SettingOutlined />, label: '路由配置' },
   { key: '/logs', icon: <FileTextOutlined />, label: '日志' },
+  { key: '/tokens', icon: <FireOutlined />, label: 'Token 统计' },
 ]
 
 export default function Layout() {

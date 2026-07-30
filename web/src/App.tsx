@@ -5,6 +5,7 @@ import Dashboard from './pages/Dashboard'
 import Sources from './pages/Sources'
 import Routing from './pages/Routing'
 import Logs from './pages/Logs'
+import Tokens from './pages/Tokens'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const token = localStorage.getItem('admin_jwt')
@@ -28,6 +29,7 @@ export default function App() {
         <Route path="sources" element={<Sources />} />
         <Route path="routing" element={<Routing />} />
         <Route path="logs" element={<Logs />} />
+        <Route path="tokens" element={<Tokens />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
