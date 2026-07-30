@@ -8,6 +8,8 @@ export interface Provider {
   api_key?: string
   /** 后端返回，表示是否已保存 API Key */
   has_api_key?: boolean
+  retry_max?: number
+  retry_backoff_ms?: number
   protocol: string
   enabled: boolean
 }

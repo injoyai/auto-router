@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Table, Button, Switch, Modal, Form, Input, Select, Tag, Space, Popconfirm, message, Result, Empty, Spin } from 'antd'
+import { Table, Button, Switch, Modal, Form, Input, InputNumber, Select, Tag, Space, Popconfirm, message, Result, Empty, Spin } from 'antd'
 import { PlusOutlined } from '@ant-design/icons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import type { Provider as ProviderType } from '../api/providers'
@@ -305,6 +305,12 @@ export default function Sources() {
             </Form.Item>
             <Form.Item name="enabled" label="启用" valuePropName="checked">
               <Switch />
+            </Form.Item>
+            <Form.Item name="retry_max" label="重试次数" tooltip="失败后重试次数，0 表示不重试">
+              <InputNumber min={0} max={5} style={{ width: '100%' }} placeholder="0" />
+            </Form.Item>
+            <Form.Item name="retry_backoff_ms" label="退避基数(ms)" tooltip="指数退避基数，如 500 -> 500ms/1s/2s">
+              <InputNumber min={100} max={5000} step={100} style={{ width: '100%' }} placeholder="500" />
             </Form.Item>
           </Form>
         </Modal>

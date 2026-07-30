@@ -6,8 +6,7 @@ import type { RequestLog } from '../api/logs'
 
 const reasonColors: Record<string, string> = {
   override: 'blue',
-  session: 'green',
-  judge: 'cyan',
+  judge: 'geekblue',
   fallback: 'orange',
 }
 
@@ -53,21 +52,27 @@ export default function Logs() {
     },
     {
       title: '状态', dataIndex: 'status', key: 'status', width: 70,
-      render: (v: number) => <span style={{ color: v < 400 ? '#52c41a' : '#ff4d4f' }}>{v}</span>,
+      render: (v: number) => <span style={{ color: v < 400 ? '#10b981' : '#f43f5e', fontWeight: 600 }}>{v}</span>,
     },
     {
       title: '延迟', dataIndex: 'latency_ms', key: 'latency_ms', width: 80,
       render: (v: number) => `${v}ms`,
     },
     {
+      title: '重试', dataIndex: 'retry_count', key: 'retry_count', width: 60,
+      render: (v: number) => v > 0 ? <Tag color="orange">{v}</Tag> : '-',
+    },
+    {
       title: '错误', dataIndex: 'error', key: 'error', width: 200, ellipsis: true,
-      render: (v: string) => v ? <span style={{ color: '#ff4d4f' }}>{v}</span> : '-',
+      render: (v: string) => v ? <span style={{ color: '#f43f5e' }}>{v}</span> : '-',
     },
   ]
 
   return (
     <div>
-      <Card size="small" className="mono-card" style={{ marginBottom: 16 }}>
+      <div className="page-title">请求日志</div>
+      <div className="page-subtitle">查看所有请求的路由记录与详细信息</div>
+      <Card size="small" className="filter-card" style={{ marginBottom: 16 }}>
         <Space wrap>
           <Select
             placeholder="路由原因"
@@ -77,7 +82,6 @@ export default function Logs() {
             onChange={setReason}
             options={[
               { value: 'override', label: 'override' },
-              { value: 'session', label: 'session' },
               { value: 'judge', label: 'judge' },
               { value: 'fallback', label: 'fallback' },
             ]}
@@ -103,11 +107,11 @@ export default function Logs() {
         expandable={{
           expandedRowRender: (r: RequestLog) => (
             r.judge_raw ? (
-              <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'monospace', fontSize: 13, background: '#fafafa', padding: 12, borderRadius: 6 }}>
+              <pre style={{ whiteSpace: 'pre-wrap', fontFamily: "'JetBrains Mono', monospace", fontSize: 13, background: '#f8f9fc', padding: 16, borderRadius: 12, border: '1px solid #f1f2f8' }}>
                 {r.judge_raw}
               </pre>
             ) : (
-              <p style={{ color: '#999' }}>无判定原始数据</p>
+              <p style={{ color: '#9fa1b5' }}>无判定原始数据</p>
             )
           ),
           rowExpandable: (r: RequestLog) => !!r.judge_raw,

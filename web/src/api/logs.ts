@@ -11,6 +11,7 @@ export interface RequestLog {
   status: number
   latency_ms: number
   error: string
+  retry_count: number
   created_at: string
 }
 
