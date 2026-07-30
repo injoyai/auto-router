@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -16,6 +17,24 @@ import (
 	"auto-router/internal/adapter/openai"
 	"auto-router/internal/model"
 )
+
+// upstreamError carries HTTP status for retry decisions.
+type upstreamError struct {
+	Status  int    // 0 = network error, otherwise HTTP status code
+	Message string
+}
+
+func (e *upstreamError) Error() string { return e.Message }
+
+// isRetryable reports whether an error is worth retrying.
+// Network errors (status 0), HTTP 5xx, and 429 are retryable.
+func isRetryable(err error) bool {
+	var ue *upstreamError
+	if errors.As(err, &ue) {
+		return ue.Status == 0 || ue.Status >= 500 || ue.Status == 429
+	}
+	return true // unknown errors default retryable
+}
 
 type Dispatcher struct {
 	Client *http.Client
@@ -32,6 +51,13 @@ func (d *Dispatcher) Call(baseURL, apiKey, protocol string, body map[string]any)
 
 // CallCtx is the context-aware variant of Call.
 func (d *Dispatcher) CallCtx(ctx context.Context, baseURL, apiKey, protocol string, body map[string]any) (*model.ChatResponse, error) {
+	return d.callOnce(ctx, baseURL, apiKey, protocol, body)
+}
+
+// callOnce performs a single non-streaming upstream request and returns the
+// parsed canonical response. Network and HTTP errors are wrapped in
+// *upstreamError so callers can make retry decisions.
+func (d *Dispatcher) callOnce(ctx context.Context, baseURL, apiKey, protocol string, body map[string]any) (*model.ChatResponse, error) {
 	b, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
@@ -45,7 +71,7 @@ func (d *Dispatcher) CallCtx(ctx context.Context, baseURL, apiKey, protocol stri
 	setUpstreamAuthHeaders(req, apiKey, protocol)
 	resp, err := d.Client.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, &upstreamError{Status: 0, Message: err.Error()}
 	}
 	defer resp.Body.Close()
 	raw, err := io.ReadAll(resp.Body)
@@ -54,13 +80,35 @@ func (d *Dispatcher) CallCtx(ctx context.Context, baseURL, apiKey, protocol stri
 	}
 	if resp.StatusCode >= 400 {
 		log.Printf("[WARN] upstream %s returned %d: %s", req.URL.String(), resp.StatusCode, string(raw))
-		return nil, fmt.Errorf("upstream returned %d", resp.StatusCode)
+		return nil, &upstreamError{Status: resp.StatusCode, Message: fmt.Sprintf("upstream returned %d", resp.StatusCode)}
 	}
 	var m map[string]any
 	if err := json.Unmarshal(raw, &m); err != nil {
 		return nil, err
 	}
 	return parseUpstreamResponse(m, protocol)
+}
+
+// CallWithRetry calls callOnce with retry logic. Returns the response,
+// the number of retries performed, and the last error.
+func (d *Dispatcher) CallWithRetry(ctx context.Context, baseURL, apiKey, protocol string, body map[string]any, retryMax, backoffMs int) (*model.ChatResponse, int, error) {
+	var lastErr error
+	retries := 0
+	for attempt := 0; attempt <= retryMax; attempt++ {
+		if attempt > 0 {
+			time.Sleep(time.Duration(backoffMs*(1<<(attempt-1))) * time.Millisecond)
+			retries++
+		}
+		resp, err := d.callOnce(ctx, baseURL, apiKey, protocol, body)
+		if err == nil {
+			return resp, retries, nil
+		}
+		if !isRetryable(err) {
+			return nil, retries, err
+		}
+		lastErr = err
+	}
+	return nil, retries, lastErr
 }
 
 // StreamChunk is one parsed chunk; nil sentinel marks [DONE].
@@ -122,47 +170,33 @@ func (d *Dispatcher) CallStream(baseURL, apiKey, protocol string, body map[strin
 }
 
 // TestConnect issues a GET {baseURL}/models to verify connectivity + credentials.
-func (d *Dispatcher) TestConnect(baseURL, apiKey, protocol string) (int, error) {
+// Returns the HTTP status, the (truncated) response body, and any transport error.
+func (d *Dispatcher) TestConnect(baseURL, apiKey, protocol string) (int, string, error) {
 	req, _ := http.NewRequest(http.MethodGet, baseURL+"/models", nil)
 	setUpstreamAuthHeaders(req, apiKey, protocol)
+	log.Printf("[INFO] test connectivity: %s %s (protocol=%s)", req.Method, req.URL.String(), protocol)
 	resp, err := d.Client.Do(req)
 	if err != nil {
-		return 0, err
+		log.Printf("[WARN] test connectivity failed: %v", err)
+		return 0, "", err
 	}
 	defer resp.Body.Close()
-	return resp.StatusCode, nil
+	raw, _ := io.ReadAll(resp.Body)
+	body := truncateResp(string(raw))
+	if resp.StatusCode >= 400 {
+		log.Printf("[WARN] test connectivity %s returned %d: %s", req.URL.String(), resp.StatusCode, body)
+	}
+	return resp.StatusCode, body, nil
 }
 
 // TestModel sends a minimal chat request to verify the model is usable.
-// Returns the HTTP status code; caller interprets 2xx as success.
-func (d *Dispatcher) TestModel(baseURL, apiKey, protocol, modelName string) (int, error) {
-	body := map[string]any{
-		"model":      modelName,
-		"messages":   []map[string]any{{"role": "user", "content": "hi"}},
-		"max_tokens": 1,
-	}
-	b, err := json.Marshal(body)
-	if err != nil {
-		return 0, err
-	}
-	path := upstreamPath(protocol)
-	req, err := http.NewRequest(http.MethodPost, baseURL+path, bytes.NewReader(b))
-	if err != nil {
-		return 0, err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	setUpstreamAuthHeaders(req, apiKey, protocol)
-	resp, err := d.Client.Do(req)
-	if err != nil {
-		return 0, err
-	}
-	defer resp.Body.Close()
-	io.Copy(io.Discard, resp.Body)
-	return resp.StatusCode, nil
+// Returns the HTTP status, the (truncated) response body, and any transport error.
+func (d *Dispatcher) TestModel(baseURL, apiKey, protocol, modelName string) (int, string, error) {
+	return d.TestModelCtx(context.Background(), baseURL, apiKey, protocol, modelName)
 }
 
 // TestModelCtx is the context-aware variant of TestModel.
-func (d *Dispatcher) TestModelCtx(ctx context.Context, baseURL, apiKey, protocol, modelName string) (int, error) {
+func (d *Dispatcher) TestModelCtx(ctx context.Context, baseURL, apiKey, protocol, modelName string) (int, string, error) {
 	body := map[string]any{
 		"model":      modelName,
 		"messages":   []map[string]any{{"role": "user", "content": "hi"}},
@@ -170,22 +204,37 @@ func (d *Dispatcher) TestModelCtx(ctx context.Context, baseURL, apiKey, protocol
 	}
 	b, err := json.Marshal(body)
 	if err != nil {
-		return 0, err
+		return 0, "", err
 	}
 	path := upstreamPath(protocol)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, baseURL+path, bytes.NewReader(b))
 	if err != nil {
-		return 0, err
+		return 0, "", err
 	}
 	req.Header.Set("Content-Type", "application/json")
 	setUpstreamAuthHeaders(req, apiKey, protocol)
+	log.Printf("[INFO] test model: %s %s (protocol=%s, model=%s)", req.Method, req.URL.String(), protocol, modelName)
 	resp, err := d.Client.Do(req)
 	if err != nil {
-		return 0, err
+		log.Printf("[WARN] test model failed: %v", err)
+		return 0, "", err
 	}
 	defer resp.Body.Close()
-	io.Copy(io.Discard, resp.Body)
-	return resp.StatusCode, nil
+	raw, _ := io.ReadAll(resp.Body)
+	respBody := truncateResp(string(raw))
+	if resp.StatusCode >= 400 {
+		log.Printf("[WARN] test model %s returned %d: %s", req.URL.String(), resp.StatusCode, respBody)
+	}
+	return resp.StatusCode, respBody, nil
+}
+
+// truncateResp caps a response body for logging/display.
+func truncateResp(s string) string {
+	const max = 500
+	if len(s) <= max {
+		return s
+	}
+	return s[:max] + "..."
 }
 
 // upstreamPath returns the endpoint path for the given protocol.

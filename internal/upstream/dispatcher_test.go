@@ -1,6 +1,7 @@
 package upstream
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -114,7 +115,7 @@ func TestTestModel(t *testing.T) {
 	defer srv.Close()
 
 	d := New()
-	status, err := d.TestModel(srv.URL, "sk-test", "openai", "gpt-4o")
+	status, _, err := d.TestModel(srv.URL, "sk-test", "openai", "gpt-4o")
 	assert.NoError(t, err)
 	assert.Equal(t, http.StatusOK, status)
 }
@@ -127,7 +128,47 @@ func TestTestModelError(t *testing.T) {
 	defer srv.Close()
 
 	d := New()
-	status, err := d.TestModel(srv.URL, "sk-bad", "openai", "gpt-4o")
+	status, _, err := d.TestModel(srv.URL, "sk-bad", "openai", "gpt-4o")
 	assert.NoError(t, err)
 	assert.Equal(t, http.StatusUnauthorized, status)
+}
+
+func TestCallWithRetrySuccess(t *testing.T) {
+	calls := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		if calls < 3 {
+			w.WriteHeader(http.StatusBadGateway)
+			io.WriteString(w, `{"error":"bad gateway"}`)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		io.WriteString(w, `{"model":"gpt-4","choices":[{"index":0,"message":{"role":"assistant","content":"hi"},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}`)
+	}))
+	defer srv.Close()
+
+	d := New()
+	// Use very short backoff for test speed
+	resp, retries, err := d.CallWithRetry(context.Background(), srv.URL, "sk-test", "openai", map[string]any{"model": "gpt-4", "messages": []map[string]any{{"role": "user", "content": "x"}}}, 3, 10)
+	assert.NoError(t, err)
+	assert.Equal(t, "hi", resp.Choices[0].Message.Content)
+	assert.Equal(t, 2, retries)
+	assert.Equal(t, 3, calls)
+}
+
+func TestCallWithRetryNonRetryable(t *testing.T) {
+	calls := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		w.WriteHeader(http.StatusUnauthorized)
+		io.WriteString(w, `{"error":{"message":"Invalid API key"}}`)
+	}))
+	defer srv.Close()
+
+	d := New()
+	resp, retries, err := d.CallWithRetry(context.Background(), srv.URL, "sk-bad", "openai", map[string]any{"model": "gpt-4", "messages": []map[string]any{{"role": "user", "content": "x"}}}, 3, 10)
+	assert.Error(t, err)
+	assert.Nil(t, resp)
+	assert.Equal(t, 0, retries) // 401 is not retryable, so 0 retries
+	assert.Equal(t, 1, calls)   // only 1 call, no retry
 }
