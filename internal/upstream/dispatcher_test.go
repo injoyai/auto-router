@@ -1,6 +1,7 @@
 package upstream
 
 import (
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -96,4 +97,37 @@ func TestCallClaudeStream(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"hi"}, contents)
 	assert.True(t, sawDone)
+}
+
+func TestTestModel(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/chat/completions", r.URL.Path)
+		assert.Equal(t, "Bearer sk-test", r.Header.Get("Authorization"))
+		var body map[string]any
+		json.NewDecoder(r.Body).Decode(&body)
+		assert.Equal(t, "gpt-4o", body["model"])
+		assert.Equal(t, float64(1), body["max_tokens"])
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		io.WriteString(w, `{"model":"gpt-4o","choices":[{"index":0,"message":{"role":"assistant","content":"h"},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}`)
+	}))
+	defer srv.Close()
+
+	d := New()
+	status, err := d.TestModel(srv.URL, "sk-test", "openai", "gpt-4o")
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusOK, status)
+}
+
+func TestTestModelError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+		io.WriteString(w, `{"error":{"message":"Invalid API key"}}`)
+	}))
+	defer srv.Close()
+
+	d := New()
+	status, err := d.TestModel(srv.URL, "sk-bad", "openai", "gpt-4o")
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusUnauthorized, status)
 }
