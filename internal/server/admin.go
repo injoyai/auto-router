@@ -39,6 +39,17 @@ func (a *App) handleAdminLogin(c *gin.Context) {
 
 // ---- Providers ----
 
+// providerInput 用于接收创建/更新请求。store.Provider.APIKey 标记 json:"-"
+// 以确保响应中不暴露密钥，但也导致 ShouldBindJSON 无法接收 api_key 字段。
+// 因此用独立输入结构体接收，再映射到 store.Provider。
+type providerInput struct {
+	Name     string `json:"name"`
+	BaseURL  string `json:"base_url"`
+	APIKey   string `json:"api_key"`
+	Protocol string `json:"protocol"`
+	Enabled  bool   `json:"enabled"`
+}
+
 func (a *App) handleListProviders(c *gin.Context) {
 	ps, err := a.Store.ListProviders()
 	if err != nil {
@@ -49,13 +60,19 @@ func (a *App) handleListProviders(c *gin.Context) {
 }
 
 func (a *App) handleCreateProvider(c *gin.Context) {
-	var p store.Provider
-	if err := c.ShouldBindJSON(&p); err != nil {
+	var in providerInput
+	if err := c.ShouldBindJSON(&in); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	if p.APIKey != "" {
-		p.APIKey = store.Encrypt(a.CryptoKey, p.APIKey)
+	p := store.Provider{
+		Name:     in.Name,
+		BaseURL:  in.BaseURL,
+		Protocol: in.Protocol,
+		Enabled:  in.Enabled,
+	}
+	if in.APIKey != "" {
+		p.APIKey = store.Encrypt(a.CryptoKey, in.APIKey)
 	}
 	if err := a.Store.CreateProvider(&p); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -71,17 +88,17 @@ func (a *App) handleUpdateProvider(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
 		return
 	}
-	var body store.Provider
-	if err := c.ShouldBindJSON(&body); err != nil {
+	var in providerInput
+	if err := c.ShouldBindJSON(&in); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	p.Name = body.Name
-	p.BaseURL = body.BaseURL
-	p.Protocol = body.Protocol
-	p.Enabled = body.Enabled
-	if body.APIKey != "" {
-		p.APIKey = store.Encrypt(a.CryptoKey, body.APIKey)
+	p.Name = in.Name
+	p.BaseURL = in.BaseURL
+	p.Protocol = in.Protocol
+	p.Enabled = in.Enabled
+	if in.APIKey != "" {
+		p.APIKey = store.Encrypt(a.CryptoKey, in.APIKey)
 	}
 	if err := a.Store.UpdateProvider(p); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})

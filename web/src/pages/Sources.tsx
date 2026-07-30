@@ -9,7 +9,6 @@ import {
   createProvider,
   updateProvider,
   deleteProvider,
-  testProvider,
 } from '../api/providers'
 import {
   listModels,
@@ -101,11 +100,6 @@ export default function Sources() {
   const [editingModel, setEditingModel] = useState<ModelType | null>(null)
   const [modelForm] = Form.useForm()
 
-  // Provider test modal state
-  const [provTestOpen, setProvTestOpen] = useState(false)
-  const [provTestResult, setProvTestResult] = useState<{ ok: boolean; status: number; error?: string } | null>(null)
-  const [provTestLoading, setProvTestLoading] = useState(false)
-
   // Model test modal state
   const [modelTestOpen, setModelTestOpen] = useState(false)
   const [modelTestResult, setModelTestResult] = useState<ModelTestResult | null>(null)
@@ -174,21 +168,6 @@ export default function Sources() {
       setModelModalOpen(false)
     } catch {
       // mutation onError already shows message, modal stays open
-    }
-  }
-
-  // Provider test handler
-  const handleProvTest = async (id: number) => {
-    setProvTestLoading(true)
-    setProvTestOpen(true)
-    setProvTestResult(null)
-    try {
-      const r = await testProvider(id)
-      setProvTestResult(r)
-    } catch {
-      setProvTestResult({ ok: false, status: 0, error: '网络错误' })
-    } finally {
-      setProvTestLoading(false)
     }
   }
 
@@ -265,7 +244,6 @@ export default function Sources() {
                   <Tag color={protocolColors[p.protocol] ?? 'default'} style={{ marginRight: 0 }}>{p.protocol}</Tag>
                 </div>
                 <Space size="small" style={{ marginTop: 4 }} onClick={(e) => e.stopPropagation()}>
-                  <Button size="small" type="link" style={{ padding: 0 }} onClick={() => handleProvTest(p.id)}>测试</Button>
                   <Button size="small" type="link" style={{ padding: 0 }} onClick={() => openEditProv(p)}>编辑</Button>
                   <Popconfirm title="确认删除？" onConfirm={() => deleteProvMut.mutate(p.id)}>
                     <Button size="small" type="link" danger style={{ padding: 0 }}>删除</Button>
@@ -355,23 +333,6 @@ export default function Sources() {
             <Switch />
           </Form.Item>
         </Form>
-      </Modal>
-
-      {/* Provider Test Modal */}
-      <Modal
-        title="连通性测试"
-        open={provTestOpen}
-        footer={<Button onClick={() => setProvTestOpen(false)}>关闭</Button>}
-        onCancel={() => setProvTestOpen(false)}
-      >
-        {provTestLoading && <p>正在测试...</p>}
-        {provTestResult && (
-          <Result
-            status={provTestResult.ok ? 'success' : 'error'}
-            title={provTestResult.ok ? '连接成功' : '连接失败'}
-            subTitle={provTestResult.ok ? `HTTP ${provTestResult.status}` : (provTestResult.error ?? `HTTP ${provTestResult.status}`)}
-          />
-        )}
       </Modal>
 
       {/* Model Test Modal */}
