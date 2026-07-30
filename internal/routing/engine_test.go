@@ -32,8 +32,8 @@ type fakeJudge struct {
 	err error
 }
 
-func (fj *fakeJudge) Judge(judgeModel *store.Model, candidates []store.Model, userText string) (string, error) {
-	return fj.out, fj.err
+func (fj *fakeJudge) Judge(judgeModel *store.Model, candidates []store.Model, userText string) (string, *model.Usage, error) {
+	return fj.out, nil, fj.err
 }
 
 func puint(v uint) *uint { return &v }

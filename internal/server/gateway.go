@@ -69,6 +69,21 @@ func (a *App) handleChat(c *gin.Context, clientFmt string, parseInbound func(map
 		return
 	}
 
+	// If the judge model was invoked, log its token usage as a separate entry
+	// so it shows up in token stats and request logs.
+	if dec.JudgeUsage != nil {
+		judgeModel, _ := a.Store.GetJudgeModel()
+		judgeName := ""
+		if judgeModel != nil {
+			judgeName = judgeModel.Name
+		}
+		a.writeLog(
+			&model.ChatRequest{SessionID: req.SessionID + "-judge", ClientFmt: req.ClientFmt},
+			&routing.Decision{ModelName: judgeName, Reason: "judge_call"},
+			judgeName, http.StatusOK, dec.JudgeLatency, "", 0, dec.JudgeUsage,
+		)
+	}
+
 	requestedModel := req.Model
 
 	prov, err := a.Store.GetProvider(dec.Model.ProviderID)

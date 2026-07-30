@@ -55,6 +55,7 @@ export default function Dashboard() {
   const reasonLabels: Record<string, string> = {
     override: '指定路由',
     judge: '智能路由',
+    judge_call: '判定调用',
     fallback: '兜底路由',
     test: '测试',
   }

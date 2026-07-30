@@ -10,6 +10,7 @@ import (
 
 	"auto-router/internal/config"
 	"auto-router/internal/jwt"
+	"auto-router/internal/model"
 	"auto-router/internal/routing"
 	"auto-router/internal/store"
 	"auto-router/internal/upstream"
@@ -131,10 +132,10 @@ type lazyJudge struct {
 // Compile-time guarantee that *lazyJudge satisfies routing.JudgeClient.
 var _ routing.JudgeClient = (*lazyJudge)(nil)
 
-func (l *lazyJudge) Judge(judgeModel *store.Model, candidates []store.Model, userText string) (string, error) {
+func (l *lazyJudge) Judge(judgeModel *store.Model, candidates []store.Model, userText string) (string, *model.Usage, error) {
 	prov, err := l.st.GetProvider(judgeModel.ProviderID)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 	apiKey, _ := store.Decrypt(l.key, prov.APIKey)
 	return routing.NewJudgeClient(l.disp, prov.BaseURL, apiKey, prov.Protocol).Judge(judgeModel, candidates, userText)

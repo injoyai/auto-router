@@ -7,14 +7,23 @@ import type { RequestLog } from '../api/logs'
 const reasonColors: Record<string, string> = {
   override: 'blue',
   judge: 'geekblue',
+  judge_call: 'cyan',
   fallback: 'orange',
   test: 'purple',
+}
+
+// 格式化耗时:ms -> ms/s/m,保留 2 位有效小数
+const formatLatency = (ms: number) => {
+  if (ms < 1000) return `${ms}ms`
+  if (ms < 60_000) return `${(ms / 1000).toFixed(2)}s`
+  return `${(ms / 60_000).toFixed(2)}m`
 }
 
 // 后端 route_reason 为英文,界面展示成中文(value 仍用英文传给后端过滤)
 const reasonLabels: Record<string, string> = {
   override: '指定路由',
   judge: '智能路由',
+  judge_call: '判定调用',
   fallback: '兜底路由',
   test: '测试',
 }
@@ -70,7 +79,7 @@ export default function Logs() {
     },
     {
       title: '耗时', dataIndex: 'latency_ms', key: 'latency_ms', width: 80,
-      render: (v: number) => `${v}ms`,
+      render: (v: number) => formatLatency(v),
     },
     {
       title: '重试', dataIndex: 'retry_count', key: 'retry_count', width: 60,
@@ -101,6 +110,7 @@ export default function Logs() {
             options={[
               { value: 'override', label: '指定路由' },
               { value: 'judge', label: '智能路由' },
+              { value: 'judge_call', label: '判定调用' },
               { value: 'fallback', label: '兜底路由' },
               { value: 'test', label: '测试' },
             ]}

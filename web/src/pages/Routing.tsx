@@ -136,7 +136,7 @@ export default function Routing() {
             label={
               <Space size={4}>
                 <span>判定模型</span>
-                <Tooltip title="请选择非推理模型（如 gpt-4o-mini），推理模型会消耗大量 token 用于思考，起不到节约成本的效果">
+                <Tooltip title="请选择非推理模型（如 deepseek-v4-flah），推理模型会消耗大量 token 用于思考，起不到节约成本的效果">
                   <InfoCircleOutlined style={{ color: 'var(--amber)', fontSize: 13 }} />
                 </Tooltip>
               </Space>
