@@ -396,5 +396,34 @@ func (a *App) handleStats(c *gin.Context) {
 	}
 	var reasons []reasonCount
 	a.Store.DB.Model(&store.RequestLog{}).Select("route_reason as reason, count(*) as count").Group("route_reason").Scan(&reasons)
-	c.JSON(http.StatusOK, gin.H{"total": total, "by_reason": reasons})
+
+	totalTokens, _ := a.Store.TokenStatsTotal()
+	byModel, _ := a.Store.TokenStatsByModel()
+	byProvider, _ := a.Store.TokenStatsByProvider()
+
+	c.JSON(http.StatusOK, gin.H{
+		"total":       total,
+		"by_reason":   reasons,
+		"tokens":      gin.H{"total": totalTokens, "prompt": tokenSumPrompt(byModel), "completion": tokenSumCompletion(byModel)},
+		"by_model":    byModel,
+		"by_provider": byProvider,
+	})
+}
+
+// tokenSumPrompt sums PromptTokens across rows.
+func tokenSumPrompt(rows []store.TokenStatRow) int64 {
+	var s int64
+	for _, r := range rows {
+		s += r.PromptTokens
+	}
+	return s
+}
+
+// tokenSumCompletion sums CompletionTokens across rows.
+func tokenSumCompletion(rows []store.TokenStatRow) int64 {
+	var s int64
+	for _, r := range rows {
+		s += r.CompletionTokens
+	}
+	return s
 }
