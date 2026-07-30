@@ -8,6 +8,8 @@ type Provider struct {
 	BaseURL   string    `gorm:"not null" json:"base_url"`
 	APIKey    string    `gorm:"not null" json:"-"`        // encrypted; never JSON-exposed
 	HasAPIKey bool      `gorm:"-" json:"has_api_key"`     // non-persisted; true if APIKey is set
+	RetryMax      int       `gorm:"default:0" json:"retry_max"`          // max retry attempts (0 = no retry)
+	RetryBackoffMs int     `gorm:"default:500" json:"retry_backoff_ms"` // backoff base in ms, exponential: base * 2^(attempt-1)
 	Protocol  string    `gorm:"not null" json:"protocol"` // openai | claude
 	Enabled   bool      `gorm:"default:true" json:"enabled"`
 	CreatedAt time.Time `json:"created_at"`

@@ -13,6 +13,7 @@ type RequestLog struct {
 	Status         int       `json:"status"`
 	LatencyMs      int64     `json:"latency_ms"`
 	Error          string    `json:"error"`
+	RetryCount    int       `json:"retry_count"`
 	CreatedAt      time.Time `json:"created_at"`
 }
 
