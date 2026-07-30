@@ -16,9 +16,9 @@ import {
   createModel,
   updateModel,
   deleteModel,
-  setJudgeModel,
   testModel,
 } from '../api/models'
+import { getRoutingConfig } from '../api/routing'
 
 const protocolColors: Record<string, string> = { openai: 'blue', claude: 'purple' }
 
@@ -36,6 +36,13 @@ export default function Sources() {
     queryFn: listModels,
     enabled: selectedProviderId !== null,
   })
+
+  // 判定模型统一从 routingConfig 派生（单一数据源，避免与路由配置页冲突）
+  const { data: routingConfig } = useQuery({
+    queryKey: ['routingConfig'],
+    queryFn: getRoutingConfig,
+  })
+  const judgeModelId = routingConfig?.judge_model_id ?? null
 
   // Provider mutations
   const createProvMut = useMutation({
@@ -82,11 +89,6 @@ export default function Sources() {
       if (err?.response?.status === 409) message.warning('该模型正被路由配置引用，无法删除')
       else message.error('删除失败')
     },
-  })
-  const judgeMut = useMutation({
-    mutationFn: setJudgeModel,
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['models'] }); message.success('已设置判定模型') },
-    onError: () => { message.error('设置失败') },
   })
 
   // Provider modal state
@@ -210,8 +212,8 @@ export default function Sources() {
     { title: '显示名', dataIndex: 'display_name', key: 'display_name' },
     { title: '描述', dataIndex: 'description', key: 'description', ellipsis: true },
     {
-      title: '判定', dataIndex: 'is_judge', key: 'is_judge',
-      render: (v: boolean) => v ? <Tag color="cyan">判定模型</Tag> : null,
+      title: '判定', key: 'is_judge',
+      render: (_: unknown, r: ModelType) => judgeModelId === r.id ? <Tag color="cyan">判定模型</Tag> : null,
     },
     {
       title: '启用', dataIndex: 'enabled', key: 'enabled',
@@ -224,11 +226,6 @@ export default function Sources() {
       render: (_: unknown, r: ModelType) => (
         <Space>
           <Button size="small" onClick={() => handleModelTest(r.id)}>测试</Button>
-          {!r.is_judge && (
-            <Popconfirm title="设为判定模型？" onConfirm={() => judgeMut.mutate(r.id)}>
-              <Button size="small">设为判定</Button>
-            </Popconfirm>
-          )}
           <Button size="small" onClick={() => openEditModel(r)}>编辑</Button>
           <Popconfirm title="确认删除？" onConfirm={() => deleteModelMut.mutate(r.id)}>
             <Button size="small" danger>删除</Button>
@@ -295,9 +292,9 @@ export default function Sources() {
           dataSource={filteredModels}
           rowKey="id"
           loading={modelsLoading}
-          rowClassName={(r) => r.is_judge ? 'ant-table-row-selected' : ''}
+          rowClassName={(r) => judgeModelId === r.id ? 'ant-table-row-selected' : ''}
           onRow={(r) => ({
-            style: r.is_judge ? { backgroundColor: '#e6fffb' } : undefined,
+            style: judgeModelId === r.id ? { backgroundColor: '#f0fdfa' } : undefined,
           })}
           locale={{ emptyText: selectedProviderId ? '暂无模型' : '请先选择左侧的 API 源' }}
         />
