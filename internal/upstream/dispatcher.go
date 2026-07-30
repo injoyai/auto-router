@@ -117,6 +117,14 @@ type StreamChunk = *model.Chunk
 // CallStream performs a streaming upstream request and invokes onChunk for
 // each parsed SSE chunk as it arrives (real streaming, not buffered).
 func (d *Dispatcher) CallStream(baseURL, apiKey, protocol string, body map[string]any, onChunk func(StreamChunk) error) error {
+	return d.callStreamOnce(baseURL, apiKey, protocol, body, onChunk)
+}
+
+// callStreamOnce performs a single streaming upstream request and invokes
+// onChunk for each parsed SSE chunk as it arrives (real streaming, not
+// buffered). Network and HTTP errors are wrapped in *upstreamError so callers
+// can make retry decisions. Scanner and onChunk errors are returned as-is.
+func (d *Dispatcher) callStreamOnce(baseURL, apiKey, protocol string, body map[string]any, onChunk func(StreamChunk) error) error {
 	b, err := json.Marshal(body)
 	if err != nil {
 		return err
@@ -128,13 +136,13 @@ func (d *Dispatcher) CallStream(baseURL, apiKey, protocol string, body map[strin
 	setUpstreamAuthHeaders(req, apiKey, protocol)
 	resp, err := d.Client.Do(req)
 	if err != nil {
-		return err
+		return &upstreamError{Status: 0, Message: err.Error()}
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode >= 400 {
 		raw, _ := io.ReadAll(resp.Body)
 		log.Printf("[WARN] upstream %s returned %d: %s", req.URL.String(), resp.StatusCode, string(raw))
-		return fmt.Errorf("upstream returned %d", resp.StatusCode)
+		return &upstreamError{Status: resp.StatusCode, Message: fmt.Sprintf("upstream returned %d", resp.StatusCode)}
 	}
 	scanner := bufio.NewScanner(resp.Body)
 	scanner.Buffer(make([]byte, 1024), 4*1024*1024)
@@ -167,6 +175,39 @@ func (d *Dispatcher) CallStream(baseURL, apiKey, protocol string, body map[strin
 		}
 	}
 	return nil
+}
+
+// CallStreamWithRetry calls callStreamOnce with retry logic.
+// Retries only BEFORE the first chunk is sent (pre-first-byte). Once output
+// has started, errors are returned immediately to avoid duplicate content.
+// Returns the number of retries performed and the last error.
+func (d *Dispatcher) CallStreamWithRetry(baseURL, apiKey, protocol string, body map[string]any, retryMax, backoffMs int, onChunk func(StreamChunk) error) (int, error) {
+	var lastErr error
+	retries := 0
+	for attempt := 0; attempt <= retryMax; attempt++ {
+		if attempt > 0 {
+			time.Sleep(time.Duration(backoffMs*(1<<(attempt-1))) * time.Millisecond)
+			retries++
+		}
+		started := false
+		err := d.callStreamOnce(baseURL, apiKey, protocol, body, func(ch StreamChunk) error {
+			started = true
+			return onChunk(ch)
+		})
+		if err == nil {
+			return retries, nil
+		}
+		// Already started output - cannot retry (would duplicate content)
+		if started {
+			return retries, err
+		}
+		// Pre-first-byte error - check if retryable
+		if !isRetryable(err) {
+			return retries, err
+		}
+		lastErr = err
+	}
+	return retries, lastErr
 }
 
 // TestConnect issues a GET {baseURL}/models to verify connectivity + credentials.

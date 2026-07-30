@@ -172,3 +172,72 @@ func TestCallWithRetryNonRetryable(t *testing.T) {
 	assert.Equal(t, 0, retries) // 401 is not retryable, so 0 retries
 	assert.Equal(t, 1, calls)   // only 1 call, no retry
 }
+
+func TestCallStreamWithRetryPreFirstByte(t *testing.T) {
+	calls := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		if calls < 2 {
+			w.WriteHeader(http.StatusBadGateway)
+			io.WriteString(w, `{"error":"bad gateway"}`)
+			return
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		io.WriteString(w, "data: {\"model\":\"gpt-4\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"hi\"}}]}\n\n")
+		io.WriteString(w, "data: [DONE]\n\n")
+	}))
+	defer srv.Close()
+
+	d := New()
+	var contents []string
+	retries, err := d.CallStreamWithRetry(srv.URL, "sk-test", "openai", map[string]any{"model": "gpt-4", "stream": true}, 3, 10, func(ch StreamChunk) error {
+		if ch == nil {
+			return nil
+		}
+		if len(ch.Choices) > 0 {
+			contents = append(contents, ch.Choices[0].Delta.Content)
+		}
+		return nil
+	})
+	assert.NoError(t, err)
+	assert.Equal(t, 1, retries)
+	assert.Equal(t, 2, calls)
+	assert.Equal(t, []string{"hi"}, contents)
+}
+
+func TestCallStreamWithRetryNoRetryAfterOutput(t *testing.T) {
+	calls := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		// First call: send one chunk then break the connection (scanner err)
+		if calls == 1 {
+			w.Header().Set("Content-Type", "text/event-stream")
+			io.WriteString(w, "data: {\"model\":\"gpt-4\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"hi\"}}]}\n\n")
+			// Connection ends here without [DONE] - scanner will finish with nil err
+			return
+		}
+		// Should not be called because output already started
+		w.Header().Set("Content-Type", "text/event-stream")
+		io.WriteString(w, "data: {\"model\":\"gpt-4\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"bye\"}}]}\n\n")
+		io.WriteString(w, "data: [DONE]\n\n")
+	}))
+	defer srv.Close()
+
+	d := New()
+	var contents []string
+	retries, err := d.CallStreamWithRetry(srv.URL, "sk-test", "openai", map[string]any{"model": "gpt-4", "stream": true}, 3, 10, func(ch StreamChunk) error {
+		if ch == nil {
+			return nil
+		}
+		if len(ch.Choices) > 0 {
+			contents = append(contents, ch.Choices[0].Delta.Content)
+		}
+		return nil
+	})
+	// The first call sends a chunk then ends normally (scanner finishes, onChunk(nil) called, returns nil)
+	// So err should be nil, retries 0, only "hi" received, calls 1
+	assert.NoError(t, err)
+	assert.Equal(t, 0, retries)
+	assert.Equal(t, 1, calls)
+	assert.Equal(t, []string{"hi"}, contents)
+}
