@@ -2,7 +2,6 @@ package server
 
 import (
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -13,45 +12,6 @@ import (
 	"auto-router/internal/routing"
 	"auto-router/internal/store"
 )
-
-// directiveOpen is the opening marker of the <<next_model: ...>> directive,
-// used by the streaming path's buffer-detect logic to hold back content that
-// might be part of a directive so it is never leaked to the client.
-const directiveOpen = "<<next_model:"
-
-// directiveHoldback returns the length of the longest suffix of s that is also
-// a prefix of directiveOpen. This is the number of trailing bytes that must be
-// held back because they could be the start of a directive completed by a
-// later chunk.
-func directiveHoldback(s string) int {
-	maxK := len(s)
-	if maxK > len(directiveOpen) {
-		maxK = len(directiveOpen)
-	}
-	for k := maxK; k > 0; k-- {
-		if strings.HasSuffix(s, directiveOpen[:k]) {
-			return k
-		}
-	}
-	return 0
-}
-
-// nextModelDirectiveInjection is appended to the system prompt when
-// enable_next_model_directive is on and the request carries X-Session-Id
-// (spec §4.3).
-const nextModelDirectiveInjection = "你可以在回复中用 <<next_model: 模型名>> 指定下一轮应使用的模型,该标记不会展示给用户。"
-
-// injectNextModelDirective appends the next-model directive instruction to the
-// system prompt. If no system message exists, a new one is inserted at index 0.
-func injectNextModelDirective(req *model.ChatRequest) {
-	for i := range req.Messages {
-		if req.Messages[i].Role == "system" {
-			req.Messages[i].Content += "\n" + nextModelDirectiveInjection
-			return
-		}
-	}
-	req.Messages = append([]model.Message{{Role: "system", Content: nextModelDirectiveInjection}}, req.Messages...)
-}
 
 // chunkEncoder encodes canonical chunks into the client's SSE format.
 type chunkEncoder interface {
@@ -111,12 +71,6 @@ func (a *App) handleChat(c *gin.Context, clientFmt string, parseInbound func(map
 
 	requestedModel := req.Model
 
-	rc, _ := a.Store.GetRoutingConfig()
-	directiveEnabled := rc != nil && rc.EnableNextModelDirective && req.SessionID != ""
-	if directiveEnabled {
-		injectNextModelDirective(req)
-	}
-
 	prov, err := a.Store.GetProvider(dec.Model.ProviderID)
 	if err != nil {
 		writeGatewayError(c, http.StatusServiceUnavailable, clientFmt, "provider not found", "router_error")
@@ -137,16 +91,15 @@ func (a *App) handleChat(c *gin.Context, clientFmt string, parseInbound func(map
 	status := http.StatusOK
 	errMsg := ""
 	if req.Stream {
-		a.streamResponse(c, prov.BaseURL, apiKey, prov.Protocol, body, dec, req, requestedModel, directiveEnabled, start)
+		a.streamResponse(c, prov.BaseURL, apiKey, prov.Protocol, body, dec, req, requestedModel, start, prov.RetryMax, prov.RetryBackoffMs)
 		return
 	}
-	resp, err := a.Dispatcher.Call(prov.BaseURL, apiKey, prov.Protocol, body)
+	resp, retryCount, err := a.Dispatcher.CallWithRetry(c.Request.Context(), prov.BaseURL, apiKey, prov.Protocol, body, prov.RetryMax, prov.RetryBackoffMs)
 	if err != nil {
 		status = http.StatusBadGateway
 		errMsg = err.Error()
 		writeGatewayError(c, status, clientFmt, err.Error(), "upstream_error")
 	} else {
-		a.postProcessResponse(req, resp, directiveEnabled)
 		// Encode response based on CLIENT protocol
 		var b []byte
 		if req.ClientFmt == "claude" {
@@ -156,7 +109,7 @@ func (a *App) handleChat(c *gin.Context, clientFmt string, parseInbound func(map
 		}
 		c.Data(http.StatusOK, "application/json", b)
 	}
-	a.writeLog(req, dec, requestedModel, status, time.Since(start), errMsg)
+	a.writeLog(req, dec, requestedModel, status, time.Since(start), errMsg, retryCount)
 }
 
 func (a *App) handleChatCompletions(c *gin.Context) {
@@ -167,7 +120,7 @@ func (a *App) handleMessages(c *gin.Context) {
 	a.handleChat(c, "claude", claude.ParseRequest)
 }
 
-func (a *App) streamResponse(c *gin.Context, baseURL, apiKey, protocol string, body map[string]any, dec *routing.Decision, req *model.ChatRequest, requestedModel string, directiveEnabled bool, start time.Time) {
+func (a *App) streamResponse(c *gin.Context, baseURL, apiKey, protocol string, body map[string]any, dec *routing.Decision, req *model.ChatRequest, requestedModel string, start time.Time, retryMax, backoffMs int) {
 	c.Writer.Header().Set("Content-Type", "text/event-stream")
 	c.Writer.Header().Set("Cache-Control", "no-cache")
 	c.Writer.Header().Set("Connection", "keep-alive")
@@ -183,63 +136,14 @@ func (a *App) streamResponse(c *gin.Context, baseURL, apiKey, protocol string, b
 		enc = openaiChunkEncoder{}
 	}
 
-	var assembled strings.Builder
-	flushed := 0
-	directiveSeen := false
-
-	flushText := func(text string) {
-		if text == "" {
-			return
-		}
-		ch := &model.Chunk{Choices: []model.ChunkChoice{{Index: 0, Delta: model.Delta{Content: text}}}}
-		c.Writer.Write(enc.EncodeChunk(ch))
-		flusher.Flush()
-	}
-
-	streamErr := a.Dispatcher.CallStream(baseURL, apiKey, protocol, body, func(ch *model.Chunk) error {
+	retryCount, streamErr := a.Dispatcher.CallStreamWithRetry(baseURL, apiKey, protocol, body, retryMax, backoffMs, func(ch *model.Chunk) error {
 		if ch == nil {
-			full := assembled.String()
-			if directiveEnabled {
-				clean, mname := routing.ExtractNextModel(full)
-				if mname != "" {
-					a.persistNextModel(req, mname)
-				}
-				if rem := clean[flushed:]; rem != "" {
-					flushText(rem)
-				}
-			} else if rem := full[flushed:]; rem != "" {
-				flushText(rem)
-			}
 			c.Writer.Write(enc.Finish())
 			flusher.Flush()
 			return nil
 		}
-		if !directiveEnabled {
-			c.Writer.Write(enc.EncodeChunk(ch))
-			flusher.Flush()
-			return nil
-		}
-		if len(ch.Choices) > 0 {
-			assembled.WriteString(ch.Choices[0].Delta.Content)
-		}
-		if directiveSeen {
-			return nil
-		}
-		full := assembled.String()
-		if idx := strings.Index(full, directiveOpen); idx >= 0 {
-			if idx > flushed {
-				flushText(full[flushed:idx])
-				flushed = idx
-			}
-			directiveSeen = true
-			return nil
-		}
-		hold := directiveHoldback(full[flushed:])
-		safeEnd := len(full) - hold
-		if safeEnd > flushed {
-			flushText(full[flushed:safeEnd])
-			flushed = safeEnd
-		}
+		c.Writer.Write(enc.EncodeChunk(ch))
+		flusher.Flush()
 		return nil
 	})
 	if streamErr != nil {
@@ -247,38 +151,10 @@ func (a *App) streamResponse(c *gin.Context, baseURL, apiKey, protocol string, b
 		errMsg = streamErr.Error()
 		writeGatewayError(c, status, req.ClientFmt, streamErr.Error(), "upstream_error")
 	}
-	a.writeLog(req, dec, requestedModel, status, time.Since(start), errMsg)
+	a.writeLog(req, dec, requestedModel, status, time.Since(start), errMsg, retryCount)
 }
 
-func (a *App) postProcessResponse(req *model.ChatRequest, resp *model.ChatResponse, directiveEnabled bool) {
-	if !directiveEnabled {
-		return
-	}
-	if len(resp.Choices) == 0 {
-		return
-	}
-	clean, mname := routing.ExtractNextModel(resp.Choices[0].Message.Content)
-	if mname != "" {
-		resp.Choices[0].Message.Content = clean
-		a.persistNextModel(req, mname)
-	}
-}
-
-func (a *App) persistNextModel(req *model.ChatRequest, mname string) {
-	if req.SessionID == "" {
-		return
-	}
-	if m, err := a.Store.GetModelByName(mname); err == nil && m != nil {
-		rc, _ := a.Store.GetRoutingConfig()
-		ttl := time.Duration(1800) * time.Second
-		if rc != nil && rc.SessionTTLSeconds > 0 {
-			ttl = time.Duration(rc.SessionTTLSeconds) * time.Second
-		}
-		_ = a.Store.SetNextModel(req.SessionID, mname, ttl)
-	}
-}
-
-func (a *App) writeLog(req *model.ChatRequest, dec *routing.Decision, requestedModel string, status int, dur time.Duration, errMsg string) {
+func (a *App) writeLog(req *model.ChatRequest, dec *routing.Decision, requestedModel string, status int, dur time.Duration, errMsg string, retryCount int) {
 	_ = a.Store.CreateLog(&store.RequestLog{
 		SessionID:      req.SessionID,
 		ClientProtocol: req.ClientFmt,
@@ -289,6 +165,7 @@ func (a *App) writeLog(req *model.ChatRequest, dec *routing.Decision, requestedM
 		Status:         status,
 		LatencyMs:      dur.Milliseconds(),
 		Error:          errMsg,
+		RetryCount:     retryCount,
 	})
 }
 
