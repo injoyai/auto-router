@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Table, Button, Switch, Modal, Form, Input, Select, Tag, Space, Popconfirm, message, Result, Empty, Spin } from 'antd'
 import { PlusOutlined } from '@ant-design/icons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
@@ -50,7 +50,14 @@ export default function Sources() {
   })
   const deleteProvMut = useMutation({
     mutationFn: deleteProvider,
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['providers'] }); message.success('已删除') },
+    onSuccess: (_data, deletedId) => {
+      qc.invalidateQueries({ queryKey: ['providers'] })
+      message.success('已删除')
+      if (deletedId === selectedProviderId) {
+        const remaining = providers?.filter((p) => p.id !== deletedId)
+        setSelectedProviderId(remaining && remaining.length > 0 ? remaining[0].id : null)
+      }
+    },
     onError: (err: any) => {
       if (err?.response?.status === 409) message.warning('该 API 源下存在模型，无法删除')
       else message.error('删除失败')
@@ -103,9 +110,11 @@ export default function Sources() {
   const [modelTestLoading, setModelTestLoading] = useState(false)
 
   // Auto-select first provider when list loads
-  if (providers && providers.length > 0 && selectedProviderId === null) {
-    setSelectedProviderId(providers[0].id)
-  }
+  useEffect(() => {
+    if (providers && providers.length > 0 && selectedProviderId === null) {
+      setSelectedProviderId(providers[0].id)
+    }
+  }, [providers, selectedProviderId])
 
   const selectedProvider = providers?.find((p) => p.id === selectedProviderId)
   const filteredModels = (models ?? []).filter((m) => m.provider_id === selectedProviderId)
@@ -124,12 +133,16 @@ export default function Sources() {
   }
   const handleProvSubmit = async () => {
     const vals = await provForm.validateFields()
-    if (editingProv) {
-      updateProvMut.mutate({ id: editingProv.id, data: vals })
-    } else {
-      createProvMut.mutate(vals)
+    try {
+      if (editingProv) {
+        await updateProvMut.mutateAsync({ id: editingProv.id, data: vals })
+      } else {
+        await createProvMut.mutateAsync(vals)
+      }
+      setProvModalOpen(false)
+    } catch {
+      // mutation onError already shows message, modal stays open
     }
-    setProvModalOpen(false)
   }
 
   // Model modal handlers
@@ -150,12 +163,16 @@ export default function Sources() {
   }
   const handleModelSubmit = async () => {
     const vals = await modelForm.validateFields()
-    if (editingModel) {
-      updateModelMut.mutate({ id: editingModel.id, data: vals })
-    } else {
-      createModelMut.mutate(vals)
+    try {
+      if (editingModel) {
+        await updateModelMut.mutateAsync({ id: editingModel.id, data: vals })
+      } else {
+        await createModelMut.mutateAsync(vals)
+      }
+      setModelModalOpen(false)
+    } catch {
+      // mutation onError already shows message, modal stays open
     }
-    setModelModalOpen(false)
   }
 
   // Provider test handler
