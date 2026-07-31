@@ -60,7 +60,7 @@ auth:
 2. 创建模型队列(Queue),将模型按优先级添加到队列中(支持拖拽排序)。
 3. 创建一个判定队列(含用于判定的模型,建议为非推理模型),在路由配置中选择该判定队列,并设置默认兜底队列(`PUT /admin/routing`)。
 4. 客户端以 OpenAI 协议调用 `POST /v1/chat/completions`,`Authorization: Bearer <gateway token>`。
-   - `model` 留空 / `"auto"` / `"route"` -> 自动路由(由判定模型选择队列)
+   - `model` 留空 / `"auto"` / `"route"` -> 自动路由(由判定队列选择)
    - `model` 设为队列名 -> 显式指定队列
    - `X-Route-Model` 头 -> 强制指定队列(最高优先)
 
@@ -69,7 +69,7 @@ auth:
 | 模式 | 触发 | reason |
 |------|------|--------|
 | Agent 指定 | `model` 字段或 `X-Route-Model` 头 | override |
-| 自动路由 | 判定模型选择队列 | judge |
+| 自动路由 | 判定队列选择 | judge |
 | 兜底 | 判定失败 | fallback |
 
 ## 功能特性
