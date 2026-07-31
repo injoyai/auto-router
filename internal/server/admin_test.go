@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -170,9 +171,29 @@ func TestAdminGroupsCRUDAndItems(t *testing.T) {
 		app.Router.ServeHTTP(w, req)
 		return w
 	}
+
+	// Create group "q". The seed group is id=1, so this is typically id=2;
+	// parse the id from the response instead of hard-coding it.
 	w := h("POST", "/admin/groups", groupInput{Name: "q", DisplayName: "Q", Enabled: true})
 	assert.Equal(t, http.StatusOK, w.Code)
+	var g store.ModelGroup
+	assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &g))
+	assert.NotZero(t, g.ID)
+	qID := g.ID
 
+	// List groups: response includes the newly created queue name "q".
+	w = h("GET", "/admin/groups", nil)
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Contains(t, w.Body.String(), "q")
+
+	// Update group DisplayName and confirm the change via list.
+	w = h("PUT", "/admin/groups/"+strconv.Itoa(int(qID)), groupInput{Name: "q", DisplayName: "Q-updated", Enabled: true})
+	assert.Equal(t, http.StatusOK, w.Code)
+	w = h("GET", "/admin/groups", nil)
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Contains(t, w.Body.String(), "Q-updated")
+
+	// Replace items on the seeded group (id=1) and verify ordering/content.
 	ms, _ := app.Store.ListModels()
 	assert.NotEmpty(t, ms)
 	w = h("PUT", "/admin/groups/1/items", map[string]any{"items": []uint{ms[0].ID}})
@@ -181,7 +202,20 @@ func TestAdminGroupsCRUDAndItems(t *testing.T) {
 	w = h("GET", "/admin/groups/1/items", nil)
 	assert.Equal(t, http.StatusOK, w.Code)
 	assert.Contains(t, w.Body.String(), "data")
+	var itemsResp struct {
+		Data []struct {
+			ModelID uint `json:"model_id"`
+		} `json:"data"`
+	}
+	assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &itemsResp))
+	assert.Len(t, itemsResp.Data, 1)
+	assert.Contains(t, []uint{itemsResp.Data[0].ModelID}, ms[0].ID)
 
+	// Delete a non-default group succeeds (q is not the default queue).
+	w = h("DELETE", "/admin/groups/"+strconv.Itoa(int(qID)), nil)
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	// Deleting the default group is rejected with 409.
 	defID := uint(1)
 	assert.NoError(t, app.Store.UpdateRoutingConfig(&store.RoutingConfig{ID: 1, DefaultGroupID: &defID, JudgeMaxInputChars: 1000}))
 	w = h("DELETE", "/admin/groups/1", nil)

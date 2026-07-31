@@ -544,8 +544,10 @@ func (a *App) handleUpdateGroup(c *gin.Context) {
 
 func (a *App) handleDeleteGroup(c *gin.Context) {
 	id, _ := strconv.Atoi(c.Param("id"))
-	rc, _ := a.Store.GetRoutingConfig()
-	if rc.DefaultGroupID != nil && *rc.DefaultGroupID == uint(id) {
+	// Guard against deleting the default queue. GetRoutingConfig may return an
+	// error or nil (e.g. empty DB), so check both before dereferencing.
+	rc, err := a.Store.GetRoutingConfig()
+	if err == nil && rc != nil && rc.DefaultGroupID != nil && *rc.DefaultGroupID == uint(id) {
 		c.JSON(http.StatusConflict, gin.H{"error": "in use as default"})
 		return
 	}
