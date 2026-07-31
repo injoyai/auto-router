@@ -61,6 +61,7 @@ web/
 ### RoutingConfig
 - `JudgeGroupID`, `DefaultGroupID`, `JudgeMaxInputChars`, `GatewayToken`
 - 单例行 (ID=1)，首次启动自动 seed
+- `GatewayToken` 可在路由配置页手动编辑或点击刷新图标随机生成（48 字符 hex，`crypto.getRandomValues`）
 
 ## 关键决策
 
@@ -89,6 +90,7 @@ web/
 4. **Select 被表格裁剪**: 表格内 Select 需设置 `getPopupContainer={() => document.body}` 避免被 `overflow` 裁剪
 5. **SQLite 并发**: 已启用 WAL + busy_timeout=5000ms 防止 "database is locked"
 6. **GORM AutoMigrate 不删列**: 从 struct 移除字段后，旧库的对应列仍残留（含 NOT NULL 约束），会阻断使用新 struct 的 INSERT。`migrateLegacyColumns` 在 `store.Open` 中统一 DropColumn 已知遗留列（`display_name`/`description`）
+7. **useEffect 依赖竞态**: `Queues.tsx` 加载队列成员时，effect 依赖只有 `[groups]` 但内部用了从 `models` 派生的 `enabledModels`。`groups` 先于 `models` 加载时 `enabledModels` 为空，所有 model_id 被 filter 掉且不可恢复（空数组 truthy 导致 guard 跳过重载）。修复：加 `!models` 前置判断 + `models` 入 deps
 
 ## 构建命令
 
@@ -110,7 +112,7 @@ npm run build           # tsc + vite build -> dist/
 | `/` | Dashboard | 概览统计 |
 | `/sources` | Sources | 服务商 + 模型管理 |
 | `/queues` | Queues | 模型队列(含拖拽排序) |
-| `/routing` | Routing | 路由配置(判定队列/兜底队列/API Key) |
+| `/routing` | Routing | 路由配置(判定队列/兜底队列/API Key 可编辑+随机生成) |
 | `/tokens` | Tokens | Token 统计 |
 | `/logs` | Logs | 请求日志(含服务商列) |
 | `/login` | Login | 登录页 |
