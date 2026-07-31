@@ -79,7 +79,7 @@ web/
 - `defaultJudgeClient` 降级为内部辅助（不再实现 `JudgeClient` 接口），单模型签名不变
 - 构建候选队列时排除判定队列自身（`g.ID == *rc.JudgeGroupID`），避免自路由
 - **已删除**: `Model.IsJudge` 字段、`SetJudgeModel`/`GetJudgeModel`/`IsModelReferenced`、`POST /admin/models/:id/judge` 接口
-- **迁移**: `migrateLegacyJudge` 在 `store.Open` 中执行，以旧 `is_judge` 列为首选源迁移为 'judge' 队列并写入 `JudgeGroupID`，随后 DropColumn 删除 `is_judge` 与 `judge_model_id` 两列
+- **迁移**: `migrateLegacyColumns` 在 `store.Open` 中先于 `migrateLegacyJudge` 执行，DropColumn 删除更早重构遗留的 `model_groups.display_name`/`description`、`models.display_name`（GORM AutoMigrate 不删列，NOT NULL 旧列会阻断新 INSERT）；随后 `migrateLegacyJudge` 以旧 `is_judge` 列为首选源迁移为 'judge' 队列并写入 `JudgeGroupID`，再 DropColumn 删除 `is_judge` 与 `judge_model_id`
 
 ## 踩坑记录
 
@@ -88,6 +88,7 @@ web/
 3. **Antd Select `children` 不渲染**: antd 5.x 的 `options` 中 `children` 字段无效，必须用 `optionRender` prop 自定义下拉项
 4. **Select 被表格裁剪**: 表格内 Select 需设置 `getPopupContainer={() => document.body}` 避免被 `overflow` 裁剪
 5. **SQLite 并发**: 已启用 WAL + busy_timeout=5000ms 防止 "database is locked"
+6. **GORM AutoMigrate 不删列**: 从 struct 移除字段后，旧库的对应列仍残留（含 NOT NULL 约束），会阻断使用新 struct 的 INSERT。`migrateLegacyColumns` 在 `store.Open` 中统一 DropColumn 已知遗留列（`display_name`/`description`）
 
 ## 构建命令
 

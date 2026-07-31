@@ -25,10 +25,37 @@ func Open(dialer Dialer, dsn string) (*Store, error) {
 	if err := db.FirstOrCreate(&RoutingConfig{}, RoutingConfig{ID: 1}).Error; err != nil {
 		return nil, err
 	}
+	if err := migrateLegacyColumns(db); err != nil {
+		return nil, err
+	}
 	if err := migrateLegacyJudge(db); err != nil {
 		return nil, err
 	}
 	return &Store{DB: db}, nil
+}
+
+// migrateLegacyColumns drops columns that were removed from structs in prior
+// refactors but linger in existing databases because GORM AutoMigrate only
+// adds columns, never drops them. NOT NULL legacy columns (e.g. display_name)
+// break INSERTs that use the current slimmer struct, so this must run before
+// any startup-time INSERT — notably migrateLegacyJudge creating the judge group.
+func migrateLegacyColumns(db *gorm.DB) error {
+	legacy := []struct {
+		model interface{}
+		col   string
+	}{
+		{&ModelGroup{}, "display_name"},
+		{&ModelGroup{}, "description"},
+		{&Model{}, "display_name"},
+	}
+	for _, l := range legacy {
+		if db.Migrator().HasColumn(l.model, l.col) {
+			if err := db.Migrator().DropColumn(l.model, l.col); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // migrateLegacyJudge 把旧"单模型判定"配置迁移为判定队列。

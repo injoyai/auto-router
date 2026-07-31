@@ -92,6 +92,34 @@ func TestMigrateLegacyJudgeFallsBackToJudgeModelID(t *testing.T) {
 	assert.Equal(t, uint(2), item.ModelID) // fell back to judge_model_id=2
 }
 
+func TestMigrateLegacyColumns(t *testing.T) {
+	// Build a DB in the state AutoMigrate leaves behind on an OLD database:
+	// new columns (remark) added, but removed columns (display_name, description)
+	// still linger because GORM AutoMigrate never drops columns.
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	assert.NoError(t, err)
+	db.Exec("CREATE TABLE `models` (`id` INTEGER PRIMARY KEY, `name` TEXT, `display_name` TEXT NOT NULL, `provider_id` INTEGER, `description` TEXT, `enabled` INTEGER, `created_at` DATETIME)")
+	db.Exec("CREATE TABLE `model_groups` (`id` INTEGER PRIMARY KEY, `name` TEXT UNIQUE, `display_name` TEXT NOT NULL, `description` TEXT, `remark` TEXT, `enabled` INTEGER, `created_at` DATETIME)")
+
+	// Sanity: INSERT without display_name fails before migration (NOT NULL).
+	err = db.Exec("INSERT INTO `model_groups` (`name`, `enabled`, `created_at`) VALUES ('x', 1, datetime())").Error
+	assert.Error(t, err)
+
+	assert.NoError(t, migrateLegacyColumns(db))
+
+	// Legacy columns dropped.
+	assert.False(t, db.Migrator().HasColumn(&ModelGroup{}, "display_name"))
+	assert.False(t, db.Migrator().HasColumn(&ModelGroup{}, "description"))
+	assert.False(t, db.Migrator().HasColumn(&Model{}, "display_name"))
+
+	// After migration, INSERT via the current (slim) struct succeeds.
+	g := ModelGroup{Name: "test-group", Enabled: true}
+	assert.NoError(t, db.Create(&g).Error)
+
+	// Idempotent: second run is a no-op.
+	assert.NoError(t, migrateLegacyColumns(db))
+}
+
 func TestMigrateLegacyJudgeNoOpWhenNoLegacy(t *testing.T) {
 	// Neither legacy column present -> no-op.
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
