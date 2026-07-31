@@ -9,7 +9,9 @@ import (
 
 type Config struct {
 	ListenAddr   string
-	DBPath       string
+	DBDriver     string // sqlite (默认) | mysql
+	DBPath       string // SQLite 文件路径（仅 sqlite 驱动使用）
+	DBDSN        string // MySQL 连接串（仅 mysql 驱动使用）
 	Password     string // admin login password; if empty, generated on first run and stored in DB
 	GatewayToken string // if empty, generated on first run and stored in DB
 	DevMode      bool
@@ -18,7 +20,9 @@ type Config struct {
 // fileConfig mirrors Config fields for the optional YAML config file.
 type fileConfig struct {
 	ListenAddr   string `yaml:"listen_addr"`
+	DBDriver     string `yaml:"db_driver"`
 	DBPath       string `yaml:"db_path"`
+	DBDSN        string `yaml:"db_dsn"`
 	Password     string `yaml:"password"`
 	GatewayToken string `yaml:"gateway_token"`
 	DevMode      bool   `yaml:"dev"`
@@ -35,7 +39,9 @@ func Load() (Config, error) {
 	}
 	return Config{
 		ListenAddr:   firstNonEmpty(os.Getenv("LISTEN_ADDR"), fc.ListenAddr, ":8080"),
+		DBDriver:     firstNonEmpty(os.Getenv("DB_DRIVER"), fc.DBDriver, "sqlite"),
 		DBPath:       firstNonEmpty(os.Getenv("DB_PATH"), fc.DBPath, "./data/database/auto-router.db"),
+		DBDSN:        firstNonEmpty(os.Getenv("DB_DSN"), fc.DBDSN),
 		Password:     firstNonEmpty(os.Getenv("PASSWORD"), fc.Password),
 		GatewayToken: firstNonEmpty(os.Getenv("GATEWAY_TOKEN"), fc.GatewayToken),
 		DevMode:      os.Getenv("DEV") != "" || fc.DevMode,
