@@ -5,7 +5,7 @@ import "gorm.io/gorm"
 type RoutingConfig struct {
 	ID                 uint  `gorm:"primaryKey" json:"id"`
 	JudgeModelID       *uint `json:"judge_model_id"`
-	DefaultModelID     *uint `json:"default_model_id"`
+	DefaultGroupID     *uint `json:"default_group_id"` // default fallback queue
 	JudgeMaxInputChars int   `gorm:"default:2000" json:"judge_max_input_chars"`
 }
 

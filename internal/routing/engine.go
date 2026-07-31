@@ -13,29 +13,33 @@ import (
 type StoreDeps interface {
 	GetJudgeModel() (*store.Model, error)
 	GetRoutingConfig() (*store.RoutingConfig, error)
-	GetModel(id uint) (*store.Model, error)
-	GetModelByName(name string) (*store.Model, error)
-	ListEnabledModels() ([]store.Model, error)
+	ListEnabledModelGroups() ([]store.ModelGroup, error)
+	GetModelGroup(id uint) (*store.ModelGroup, error)
+	GetModelGroupByName(name string) (*store.ModelGroup, error)
+	GetGroupChain(groupID uint) ([]store.Model, error)
 }
 
 // Compile-time guarantee that *store.Store satisfies StoreDeps.
 var _ StoreDeps = (*store.Store)(nil)
 
-// JudgeClient invokes the judge model to pick a model name.
+// JudgeClient invokes the judge model to pick a queue name.
 // Returns (content, usage, err): usage is the token usage of the judge call
 // (nil when the judge was not invoked or the call failed before parsing).
 type JudgeClient interface {
-	Judge(judgeModel *store.Model, candidates []store.Model, userText string) (string, *model.Usage, error)
+	Judge(judgeModel *store.Model, candidates []Candidate, userText string) (string, *model.Usage, error)
 }
 
 type Decision struct {
-	ModelName   string
-	Model       *store.Model
-	Reason      string // override | judge | fallback
-	JudgeRaw    string
-	JudgeModel  string        // name of the judge model (empty if judge not invoked)
-	JudgeUsage  *model.Usage   // token usage of the judge call (nil if not called)
-	JudgeLatency time.Duration  // elapsed time of the judge call
+	ModelName     string         // target name (queue name), used for RoutedModel
+	Model         *store.Model   // first model in chain (back-compat)
+	Models        []*store.Model // ordered chain
+	Reason        string         // override | judge | fallback
+	ServedModel   string         // filled by gateway on success
+	FailoverCount int            // filled by gateway
+	JudgeRaw      string
+	JudgeModel    string
+	JudgeUsage    *model.Usage
+	JudgeLatency  time.Duration
 }
 
 type Engine struct {
@@ -47,30 +51,67 @@ func New(s StoreDeps, j JudgeClient) *Engine {
 	return &Engine{Store: s, Judge: j}
 }
 
-// Route decides which model to use for the request.
+// toPtrChain converts a slice of Model values to a slice of pointers,
+// preserving order. Each pointer addresses a distinct element.
+func toPtrChain(chain []store.Model) []*store.Model {
+	out := make([]*store.Model, len(chain))
+	for i := range chain {
+		out[i] = &chain[i]
+	}
+	return out
+}
+
+// resolveGroupChain resolves a queue name to an ordered model chain.
+// Only looks up ModelGroup, never Model.
+func (e *Engine) resolveGroupChain(name string) ([]*store.Model, error) {
+	g, err := e.Store.GetModelGroupByName(name)
+	if err != nil || g == nil || !g.Enabled {
+		return nil, fmt.Errorf("queue %q not found", name)
+	}
+	chain, err := e.Store.GetGroupChain(g.ID)
+	if err != nil {
+		return nil, err
+	}
+	if len(chain) == 0 {
+		return nil, fmt.Errorf("queue %q has no available models", name)
+	}
+	return toPtrChain(chain), nil
+}
+
+// Route decides which queue to use for the request.
 func (e *Engine) Route(req *model.ChatRequest) (*Decision, error) {
-	// 1. Override
+	// 1. Override: must be a queue name; miss -> error (no fallback)
 	if req.Override != "" {
-		if m, err := e.Store.GetModelByName(req.Override); err == nil && m != nil && m.Enabled {
-			return &Decision{ModelName: m.Name, Model: m, Reason: "override"}, nil
+		chain, err := e.resolveGroupChain(req.Override)
+		if err != nil {
+			return nil, err
 		}
+		return &Decision{ModelName: req.Override, Model: chain[0], Models: chain, Reason: "override"}, nil
 	}
 
-	// 2. Judge
+	// 2. Judge: candidates are only enabled queues with non-empty chains
 	rc, err := e.Store.GetRoutingConfig()
 	if err != nil {
 		return nil, fmt.Errorf("get routing config: %w", err)
 	}
 	judge, _ := e.Store.GetJudgeModel()
-	// I4: track judge diagnostics so fallback Decisions still carry JudgeRaw
-	// for the request log, and log failures at warning level.
 	judgeName := ""
 	judgeRaw := ""
 	var judgeUsage *model.Usage
 	var judgeLatency time.Duration
 	if judge != nil {
 		judgeName = judge.Name
-		cands, _ := e.Store.ListEnabledModels()
+		groups, _ := e.Store.ListEnabledModelGroups()
+		cands := make([]Candidate, 0, len(groups))
+		known := make([]string, 0, len(groups))
+		for _, g := range groups {
+			ch, err := e.Store.GetGroupChain(g.ID)
+			if err != nil || len(ch) == 0 {
+				continue
+			}
+			cands = append(cands, Candidate{Name: g.Name, Description: g.Description})
+			known = append(known, g.Name)
+		}
 		userText := TruncateUserText(req.LastUserMessage(), rc.JudgeMaxInputChars)
 		jStart := time.Now()
 		raw, usage, jerr := e.Judge.Judge(judge, cands, userText)
@@ -84,13 +125,9 @@ func (e *Engine) Route(req *model.ChatRequest) (*Decision, error) {
 			log.Printf("[WARN] judge returned empty output")
 			judgeRaw = "error: empty judge output"
 		default:
-			known := make([]string, 0, len(cands))
-			for _, c := range cands {
-				known = append(known, c.Name)
-			}
 			if picked := ParseJudgeOutput(raw, known); picked != "" {
-				if m, err := e.Store.GetModelByName(picked); err == nil && m != nil {
-					return &Decision{ModelName: m.Name, Model: m, Reason: "judge", JudgeRaw: raw, JudgeModel: judgeName, JudgeUsage: judgeUsage, JudgeLatency: judgeLatency}, nil
+				if chain, err := e.resolveGroupChain(picked); err == nil {
+					return &Decision{ModelName: picked, Model: chain[0], Models: chain, Reason: "judge", JudgeRaw: raw, JudgeModel: judgeName, JudgeUsage: judgeUsage, JudgeLatency: judgeLatency}, nil
 				}
 			}
 			log.Printf("[WARN] judge output unparseable: %q", raw)
@@ -98,11 +135,14 @@ func (e *Engine) Route(req *model.ChatRequest) (*Decision, error) {
 		}
 	}
 
-	// 3. Fallback to default model
-	if rc.DefaultModelID != nil {
-		if m, err := e.Store.GetModel(*rc.DefaultModelID); err == nil && m != nil {
-			return &Decision{ModelName: m.Name, Model: m, Reason: "fallback", JudgeRaw: judgeRaw, JudgeModel: judgeName, JudgeUsage: judgeUsage, JudgeLatency: judgeLatency}, nil
+	// 3. Fallback: default group
+	if rc.DefaultGroupID != nil {
+		if g, err := e.Store.GetModelGroup(*rc.DefaultGroupID); err == nil && g != nil && g.Enabled {
+			if chain, err := e.Store.GetGroupChain(g.ID); err == nil && len(chain) > 0 {
+				out := toPtrChain(chain)
+				return &Decision{ModelName: g.Name, Model: out[0], Models: out, Reason: "fallback", JudgeRaw: judgeRaw, JudgeModel: judgeName, JudgeUsage: judgeUsage, JudgeLatency: judgeLatency}, nil
+			}
 		}
 	}
-	return nil, fmt.Errorf("no model available and no default configured")
+	return nil, fmt.Errorf("no queue available and no default configured")
 }

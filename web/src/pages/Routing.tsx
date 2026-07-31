@@ -4,6 +4,7 @@ import { InfoCircleOutlined, CopyOutlined } from '@ant-design/icons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getRoutingConfig, updateRoutingConfig } from '../api/routing'
 import { listModels } from '../api/models'
+import { listGroups } from '../api/groups'
 
 const { Text } = Typography
 
@@ -20,6 +21,11 @@ export default function Routing() {
   const { data: models } = useQuery({
     queryKey: ['models'],
     queryFn: listModels,
+  })
+
+  const { data: groups } = useQuery({
+    queryKey: ['groups'],
+    queryFn: listGroups,
   })
 
   useEffect(() => {
@@ -47,6 +53,8 @@ export default function Routing() {
 
   const enabledModels = (models ?? []).filter((m) => m.enabled)
   const modelOptions = enabledModels.map((m) => ({ value: m.id, label: `${m.display_name} (${m.name})` }))
+  const enabledGroups = (groups ?? []).filter((g) => g.enabled)
+  const groupOptions = enabledGroups.map((g) => ({ value: g.id, label: g.name }))
   const baseUrl = window.location.origin + '/v1'
 
   const copyText = (text: string, label: string) => {
@@ -146,18 +154,18 @@ export default function Routing() {
             <Select allowClear placeholder="选择判定模型" options={modelOptions} />
           </Form.Item>
           <Form.Item
-            name="default_model_id"
+            name="default_group_id"
             label={
               <Space size={4}>
-                <span>默认兜底模型</span>
-                <Tooltip title="当判定模型无法决策、或目标模型不可用时，请求将回退到此模型处理">
+                <span>默认兜底队列</span>
+                <Tooltip title="当判定模型无法决策、或目标模型不可用时，请求将回退到此队列处理">
                   <InfoCircleOutlined style={{ color: 'var(--copper)', fontSize: 13 }} />
                 </Tooltip>
               </Space>
             }
-            extra={<Text type="secondary" style={{ fontSize: 12 }}>判定失败或目标模型不可用时，请求将回退到此模型</Text>}
+            extra={<Text type="secondary" style={{ fontSize: 12 }}>判定失败或目标模型不可用时，请求将回退到此队列</Text>}
           >
-            <Select allowClear placeholder="选择兜底模型" options={modelOptions} />
+            <Select allowClear placeholder="选择兜底队列" options={groupOptions} />
           </Form.Item>
           <Form.Item name="judge_max_input_chars" label="判定输入截断（字符）">
             <InputNumber min={100} max={10000} style={{ width: '100%' }} />

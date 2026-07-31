@@ -116,6 +116,12 @@ func NewApp(cfg Config, st *store.Store, cryptoKey []byte, gatewayToken, adminTo
 	authAdmin.POST("/models/:id/test", app.handleTestModel)
 	authAdmin.GET("/routing", app.handleGetRouting)
 	authAdmin.PUT("/routing", app.handleUpdateRouting)
+	authAdmin.GET("/groups", app.handleListGroups)
+	authAdmin.POST("/groups", app.handleCreateGroup)
+	authAdmin.PUT("/groups/:id", app.handleUpdateGroup)
+	authAdmin.DELETE("/groups/:id", app.handleDeleteGroup)
+	authAdmin.GET("/groups/:id/items", app.handleListGroupItems)
+	authAdmin.PUT("/groups/:id/items", app.handleReplaceGroupItems)
 	authAdmin.GET("/logs", app.handleListLogs)
 	authAdmin.GET("/stats", app.handleStats)
 	return app
@@ -132,7 +138,7 @@ type lazyJudge struct {
 // Compile-time guarantee that *lazyJudge satisfies routing.JudgeClient.
 var _ routing.JudgeClient = (*lazyJudge)(nil)
 
-func (l *lazyJudge) Judge(judgeModel *store.Model, candidates []store.Model, userText string) (string, *model.Usage, error) {
+func (l *lazyJudge) Judge(judgeModel *store.Model, candidates []routing.Candidate, userText string) (string, *model.Usage, error) {
 	prov, err := l.st.GetProvider(judgeModel.ProviderID)
 	if err != nil {
 		return "", nil, err

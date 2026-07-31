@@ -3,6 +3,7 @@ import Layout from './components/Layout'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import Sources from './pages/Sources'
+import Queues from './pages/Queues'
 import Routing from './pages/Routing'
 import Logs from './pages/Logs'
 import Tokens from './pages/Tokens'
@@ -27,6 +28,7 @@ export default function App() {
       >
         <Route index element={<Dashboard />} />
         <Route path="sources" element={<Sources />} />
+        <Route path="queues" element={<Queues />} />
         <Route path="routing" element={<Routing />} />
         <Route path="logs" element={<Logs />} />
         <Route path="tokens" element={<Tokens />} />

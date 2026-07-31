@@ -1,6 +1,7 @@
 package routing
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -10,92 +11,107 @@ import (
 )
 
 type fakeStore struct {
-	judge  *store.Model
-	def    *store.Model
-	byName map[string]*store.Model
+	judge    *store.Model
+	defGroup *uint
+	groups   []store.ModelGroup
+	chains   map[uint][]store.Model
+	byName   map[string]*store.ModelGroup
 }
 
-func (f *fakeStore) GetJudgeModel() (*store.Model, error)            { return f.judge, nil }
-func (f *fakeStore) GetRoutingConfig() (*store.RoutingConfig, error) { return &store.RoutingConfig{DefaultModelID: puint(2), JudgeMaxInputChars: 1000}, nil }
-func (f *fakeStore) GetModel(id uint) (*store.Model, error)          { return f.byName["m"+itoa(id)], nil }
-func (f *fakeStore) GetModelByName(n string) (*store.Model, error)   { return f.byName[n], nil }
-func (f *fakeStore) ListEnabledModels() ([]store.Model, error) {
-	var out []store.Model
-	for _, m := range f.byName {
-		out = append(out, *m)
-	}
-	return out, nil
+func (f *fakeStore) GetJudgeModel() (*store.Model, error) { return f.judge, nil }
+func (f *fakeStore) GetRoutingConfig() (*store.RoutingConfig, error) {
+	return &store.RoutingConfig{DefaultGroupID: f.defGroup, JudgeMaxInputChars: 1000}, nil
 }
+func (f *fakeStore) ListEnabledModelGroups() ([]store.ModelGroup, error) { return f.groups, nil }
+func (f *fakeStore) GetModelGroup(id uint) (*store.ModelGroup, error) {
+	for _, g := range f.groups {
+		if g.ID == id {
+			return &g, nil
+		}
+	}
+	return nil, fmt.Errorf("not found")
+}
+func (f *fakeStore) GetModelGroupByName(n string) (*store.ModelGroup, error) {
+	if g, ok := f.byName[n]; ok {
+		return g, nil
+	}
+	return nil, fmt.Errorf("not found")
+}
+func (f *fakeStore) GetGroupChain(groupID uint) ([]store.Model, error) { return f.chains[groupID], nil }
 
 type fakeJudge struct {
 	out string
 	err error
 }
 
-func (fj *fakeJudge) Judge(judgeModel *store.Model, candidates []store.Model, userText string) (string, *model.Usage, error) {
+func (fj *fakeJudge) Judge(judgeModel *store.Model, candidates []Candidate, userText string) (string, *model.Usage, error) {
 	return fj.out, nil, fj.err
 }
 
 func puint(v uint) *uint { return &v }
-func itoa(v uint) string {
-	if v == 0 {
-		return "0"
-	}
-	digits := []byte{}
-	for v > 0 {
-		digits = append([]byte{byte('0' + v%10)}, digits...)
-		v /= 10
-	}
-	return string(digits)
-}
 
 func newEngine() (*Engine, *fakeStore, *fakeJudge) {
+	m := store.Model{ID: 1, Name: "gpt-4o", Enabled: true}
+	g := store.ModelGroup{ID: 7, Name: "deepseek-v4-flash", Enabled: true}
 	fs := &fakeStore{
-		byName: map[string]*store.Model{
-			"gpt-4o": {ID: 1, Name: "gpt-4o", Enabled: true},
-			"m2":     {ID: 2, Name: "default-model", Enabled: true},
-		},
+		groups: []store.ModelGroup{g},
+		byName: map[string]*store.ModelGroup{"deepseek-v4-flash": &g},
+		chains: map[uint][]store.Model{7: {m}},
 	}
-	fj := &fakeJudge{out: "gpt-4o"}
+	fj := &fakeJudge{out: "deepseek-v4-flash"}
 	return New(fs, fj), fs, fj
 }
 
 func TestRouteOverride(t *testing.T) {
 	e, _, _ := newEngine()
-	req := &model.ChatRequest{Override: "gpt-4o"}
-	dec, err := e.Route(req)
+	dec, err := e.Route(&model.ChatRequest{Override: "deepseek-v4-flash"})
 	assert.NoError(t, err)
-	assert.Equal(t, "gpt-4o", dec.ModelName)
+	assert.Equal(t, "deepseek-v4-flash", dec.ModelName)
 	assert.Equal(t, "override", dec.Reason)
+	assert.Len(t, dec.Models, 1)
+}
+
+func TestRouteOverrideUnknownQueue(t *testing.T) {
+	e, _, _ := newEngine()
+	_, err := e.Route(&model.ChatRequest{Override: "no-such-queue"})
+	assert.Error(t, err)
 }
 
 func TestRouteJudge(t *testing.T) {
 	e, fs, _ := newEngine()
 	fs.judge = &store.Model{ID: 9, Name: "judge-mini"}
-	req := &model.ChatRequest{Messages: []model.Message{{Role: "user", Content: "hi"}}}
-	dec, err := e.Route(req)
+	dec, err := e.Route(&model.ChatRequest{Messages: []model.Message{{Role: "user", Content: "hi"}}})
 	assert.NoError(t, err)
-	assert.Equal(t, "gpt-4o", dec.ModelName)
+	assert.Equal(t, "deepseek-v4-flash", dec.ModelName)
 	assert.Equal(t, "judge", dec.Reason)
-	assert.Equal(t, "gpt-4o", dec.JudgeRaw)
 }
 
 func TestRouteFallbackOnBadJudge(t *testing.T) {
 	e, fs, fj := newEngine()
 	fs.judge = &store.Model{ID: 9, Name: "judge-mini"}
 	fj.out = "nonexistent"
-	req := &model.ChatRequest{Messages: []model.Message{{Role: "user", Content: "hi"}}}
-	dec, err := e.Route(req)
+	fs.defGroup = puint(7)
+	dec, err := e.Route(&model.ChatRequest{Messages: []model.Message{{Role: "user", Content: "hi"}}})
 	assert.NoError(t, err)
-	assert.Equal(t, "default-model", dec.ModelName)
+	assert.Equal(t, "deepseek-v4-flash", dec.ModelName)
 	assert.Equal(t, "fallback", dec.Reason)
 }
 
-func TestRouteFallbackNoJudge(t *testing.T) {
-	e, fs, _ := newEngine()
-	fs.judge = nil
-	req := &model.ChatRequest{Messages: []model.Message{{Role: "user", Content: "hi"}}}
-	dec, err := e.Route(req)
+func TestRouteOverrideMultiModelChainOrder(t *testing.T) {
+	m1 := store.Model{ID: 1, Name: "m1", Enabled: true}
+	m2 := store.Model{ID: 2, Name: "m2", Enabled: true}
+	g := store.ModelGroup{ID: 8, Name: "multi-q", Enabled: true}
+	fs := &fakeStore{
+		groups: []store.ModelGroup{g},
+		byName: map[string]*store.ModelGroup{"multi-q": &g},
+		chains: map[uint][]store.Model{8: {m1, m2}},
+	}
+	e := New(fs, &fakeJudge{})
+	dec, err := e.Route(&model.ChatRequest{Override: "multi-q"})
 	assert.NoError(t, err)
-	assert.Equal(t, "fallback", dec.Reason)
+	assert.Equal(t, "multi-q", dec.ModelName)
+	assert.Len(t, dec.Models, 2)
+	assert.Equal(t, "m1", dec.Models[0].Name)
+	assert.Equal(t, "m2", dec.Models[1].Name)
+	assert.Equal(t, "m1", dec.Model.Name) // chain head
 }

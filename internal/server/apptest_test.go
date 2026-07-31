@@ -38,10 +38,17 @@ func newTestApp(t *testing.T, upstreamURL string) *testApp {
 	if err := st.CreateModel(target); err != nil {
 		t.Fatal(err)
 	}
+	grp := &store.ModelGroup{Name: "deepseek-v4-flash", DisplayName: "DSV4", Enabled: true}
+	if err := st.CreateModelGroup(grp); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.ReplaceGroupItems(grp.ID, []uint{target.ID}); err != nil {
+		t.Fatal(err)
+	}
 	if err := st.UpdateRoutingConfig(&store.RoutingConfig{
 		ID:                 1,
 		JudgeModelID:       &judge.ID,
-		DefaultModelID:     &target.ID,
+		DefaultGroupID:     &grp.ID,
 		JudgeMaxInputChars: 2000,
 	}); err != nil {
 		t.Fatal(err)
@@ -76,10 +83,17 @@ func newTestAppWithProtocol(t *testing.T, upstreamURL, protocol string) *testApp
 	if err := st.CreateModel(target); err != nil {
 		t.Fatal(err)
 	}
+	grp := &store.ModelGroup{Name: "claude-queue", DisplayName: "Claude Q", Enabled: true}
+	if err := st.CreateModelGroup(grp); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.ReplaceGroupItems(grp.ID, []uint{target.ID}); err != nil {
+		t.Fatal(err)
+	}
 	if err := st.UpdateRoutingConfig(&store.RoutingConfig{
 		ID:                 1,
 		JudgeModelID:       &judge.ID,
-		DefaultModelID:     &target.ID,
+		DefaultGroupID:     &grp.ID,
 		JudgeMaxInputChars: 2000,
 	}); err != nil {
 		t.Fatal(err)

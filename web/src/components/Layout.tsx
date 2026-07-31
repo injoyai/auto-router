@@ -8,6 +8,7 @@ import {
   LogoutOutlined,
   ThunderboltFilled,
   FireOutlined,
+  UnorderedListOutlined,
 } from '@ant-design/icons'
 
 const { Sider, Content } = AntLayout
@@ -15,6 +16,7 @@ const { Sider, Content } = AntLayout
 const menuItems = [
   { key: '/', icon: <DashboardOutlined />, label: '仪表盘' },
   { key: '/sources', icon: <AppstoreOutlined />, label: '模型管理' },
+  { key: '/queues', icon: <UnorderedListOutlined />, label: '模型队列' },
   { key: '/routing', icon: <SettingOutlined />, label: '路由配置' },
   { key: '/logs', icon: <FileTextOutlined />, label: '日志' },
   { key: '/tokens', icon: <FireOutlined />, label: 'Token 统计' },

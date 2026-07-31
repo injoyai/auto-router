@@ -29,7 +29,7 @@ func NewJudgeClient(d *upstream.Dispatcher, baseURL, apiKey, protocol string) *d
 // Judge calls the judge model with a 10s timeout. The request body is built
 // according to the judge provider's protocol: Claude requires max_tokens and
 // a top-level system field (extracted from the first system message).
-func (j *defaultJudgeClient) Judge(judgeModel *store.Model, candidates []store.Model, userText string) (string, *model.Usage, error) {
+func (j *defaultJudgeClient) Judge(judgeModel *store.Model, candidates []Candidate, userText string) (string, *model.Usage, error) {
 	msgs := BuildJudgeMessages(candidates, userText)
 	var body map[string]any
 	if j.protocol == "claude" {

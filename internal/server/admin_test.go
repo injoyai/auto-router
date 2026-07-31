@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -98,8 +99,9 @@ func TestTestProviderOkLogic(t *testing.T) {
 }
 
 // TestDeleteReferencedRejected (I10) verifies that deleting a provider with
-// models, the judge model, and the default model all return 409 "in use",
-// while an unreferenced model/provider can be deleted.
+// models and deleting the judge model both return 409 "in use", while the
+// default model (now a soft queue reference, no longer a hard blocker) and an
+// unreferenced model/provider can be deleted.
 func TestDeleteReferencedRejected(t *testing.T) {
 	app := newTestApp(t, "http://example.com")
 	tok := adminToken(t, app)
@@ -121,12 +123,12 @@ func TestDeleteReferencedRejected(t *testing.T) {
 	app.Router.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusConflict, w.Code)
 
-	// Delete default model (id=2) -> 409 (default_model_id)
+	// Delete model id=2 (former default model; default check removed, no longer blocks) -> 200
 	req = httptest.NewRequest(http.MethodDelete, "/admin/models/2", nil)
 	req.Header.Set("Authorization", "Bearer "+tok)
 	w = httptest.NewRecorder()
 	app.Router.ServeHTTP(w, req)
-	assert.Equal(t, http.StatusConflict, w.Code)
+	assert.Equal(t, http.StatusOK, w.Code)
 
 	// Create an unreferenced model + provider and delete them successfully.
 	prov := &store.Provider{Name: "p2", BaseURL: "http://x", APIKey: store.Encrypt(app.CryptoKey, "k"), Protocol: "openai", Enabled: true}
@@ -149,4 +151,73 @@ func TestDeleteReferencedRejected(t *testing.T) {
 	w = httptest.NewRecorder()
 	app.Router.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestAdminGroupsCRUDAndItems(t *testing.T) {
+	app := newTestApp(t, startMockUpstream(t))
+	tok := adminToken(t, app)
+	h := func(method, path string, body any) *httptest.ResponseRecorder {
+		var buf *bytes.Buffer
+		if body != nil {
+			b, _ := json.Marshal(body)
+			buf = bytes.NewBuffer(b)
+		} else {
+			buf = bytes.NewBuffer(nil)
+		}
+		req := httptest.NewRequest(method, path, buf)
+		req.Header.Set("Authorization", "Bearer "+tok)
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		app.Router.ServeHTTP(w, req)
+		return w
+	}
+
+	// Create group "q". The seed group is id=1, so this is typically id=2;
+	// parse the id from the response instead of hard-coding it.
+	w := h("POST", "/admin/groups", groupInput{Name: "q", DisplayName: "Q", Enabled: true})
+	assert.Equal(t, http.StatusOK, w.Code)
+	var g store.ModelGroup
+	assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &g))
+	assert.NotZero(t, g.ID)
+	qID := g.ID
+
+	// List groups: response includes the newly created queue name "q".
+	w = h("GET", "/admin/groups", nil)
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Contains(t, w.Body.String(), "q")
+
+	// Update group DisplayName and confirm the change via list.
+	w = h("PUT", "/admin/groups/"+strconv.Itoa(int(qID)), groupInput{Name: "q", DisplayName: "Q-updated", Enabled: true})
+	assert.Equal(t, http.StatusOK, w.Code)
+	w = h("GET", "/admin/groups", nil)
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Contains(t, w.Body.String(), "Q-updated")
+
+	// Replace items on the seeded group (id=1) and verify ordering/content.
+	ms, _ := app.Store.ListModels()
+	assert.NotEmpty(t, ms)
+	w = h("PUT", "/admin/groups/1/items", map[string]any{"items": []uint{ms[0].ID}})
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	w = h("GET", "/admin/groups/1/items", nil)
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Contains(t, w.Body.String(), "data")
+	var itemsResp struct {
+		Data []struct {
+			ModelID uint `json:"model_id"`
+		} `json:"data"`
+	}
+	assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &itemsResp))
+	assert.Len(t, itemsResp.Data, 1)
+	assert.Contains(t, []uint{itemsResp.Data[0].ModelID}, ms[0].ID)
+
+	// Delete a non-default group succeeds (q is not the default queue).
+	w = h("DELETE", "/admin/groups/"+strconv.Itoa(int(qID)), nil)
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	// Deleting the default group is rejected with 409.
+	defID := uint(1)
+	assert.NoError(t, app.Store.UpdateRoutingConfig(&store.RoutingConfig{ID: 1, DefaultGroupID: &defID, JudgeMaxInputChars: 1000}))
+	w = h("DELETE", "/admin/groups/1", nil)
+	assert.Equal(t, http.StatusConflict, w.Code)
 }
