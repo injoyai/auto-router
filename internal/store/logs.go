@@ -40,8 +40,8 @@ func (s *Store) CreateLog(l *RequestLog) error {
 	return s.DB.Create(l).Error
 }
 
-func (s *Store) ListLogs(page, pageSize int, reason, model string) ([]RequestLog, int64, error) {
-	var logs []RequestLog
+func (s *Store) ListLogs(page, pageSize int, reason, model string) ([]LogWithProvider, int64, error) {
+	var logs []LogWithProvider
 	var total int64
 	q := s.DB.Table("request_logs").
 		Joins("LEFT JOIN models ON COALESCE(NULLIF(request_logs.served_model, ''), request_logs.routed_model) = models.name").
