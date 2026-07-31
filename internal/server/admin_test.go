@@ -99,9 +99,9 @@ func TestTestProviderOkLogic(t *testing.T) {
 }
 
 // TestDeleteReferencedRejected (I10) verifies that deleting a provider with
-// models and deleting the judge model both return 409 "in use", while the
-// default model (now a soft queue reference, no longer a hard blocker) and an
-// unreferenced model/provider can be deleted.
+// models returns 409 "in use", while model deletion always cascades (queue
+// membership is a soft reference): the judge model, the former default model,
+// and an unreferenced model can all be deleted.
 func TestDeleteReferencedRejected(t *testing.T) {
 	app := newTestApp(t, "http://example.com")
 	tok := adminToken(t, app)
@@ -116,12 +116,13 @@ func TestDeleteReferencedRejected(t *testing.T) {
 	assert.Equal(t, http.StatusConflict, w.Code)
 	assert.Contains(t, w.Body.String(), "in use")
 
-	// Delete judge model (id=1) -> 409 (is_judge)
+	// Delete judge model (id=1) -> 200 (judge is now a queue member; soft
+	// reference, deletion cascades the ModelGroupItem row).
 	req = httptest.NewRequest(http.MethodDelete, "/admin/models/1", nil)
 	req.Header.Set("Authorization", "Bearer "+tok)
 	w = httptest.NewRecorder()
 	app.Router.ServeHTTP(w, req)
-	assert.Equal(t, http.StatusConflict, w.Code)
+	assert.Equal(t, http.StatusOK, w.Code)
 
 	// Delete model id=2 (former default model; default check removed, no longer blocks) -> 200
 	req = httptest.NewRequest(http.MethodDelete, "/admin/models/2", nil)

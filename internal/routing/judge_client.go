@@ -20,9 +20,6 @@ type defaultJudgeClient struct {
 	proxyURL string
 }
 
-// Compile-time guarantee that *defaultJudgeClient satisfies JudgeClient.
-var _ JudgeClient = (*defaultJudgeClient)(nil)
-
 func NewJudgeClient(d *upstream.Dispatcher, baseURL, apiKey, protocol, proxyURL string) *defaultJudgeClient {
 	return &defaultJudgeClient{disp: d, baseURL: baseURL, apiKey: apiKey, protocol: protocol, proxyURL: proxyURL}
 }

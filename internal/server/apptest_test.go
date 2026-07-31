@@ -31,7 +31,11 @@ func newTestApp(t *testing.T, upstreamURL string) *testApp {
 	if err := st.CreateModel(judge); err != nil {
 		t.Fatal(err)
 	}
-	if err := st.SetJudgeModel(judge.ID); err != nil {
+	judgeGrp := &store.ModelGroup{Name: "judge", Enabled: true}
+	if err := st.CreateModelGroup(judgeGrp); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.ReplaceGroupItems(judgeGrp.ID, []uint{judge.ID}); err != nil {
 		t.Fatal(err)
 	}
 	target := &store.Model{Name: "gpt-4o", ProviderID: prov.ID, Enabled: true}
@@ -47,7 +51,7 @@ func newTestApp(t *testing.T, upstreamURL string) *testApp {
 	}
 	if err := st.UpdateRoutingConfig(&store.RoutingConfig{
 		ID:                 1,
-		JudgeModelID:       &judge.ID,
+		JudgeGroupID:       &judgeGrp.ID,
 		DefaultGroupID:     &grp.ID,
 		JudgeMaxInputChars: 2000,
 	}); err != nil {
@@ -76,7 +80,11 @@ func newTestAppWithProtocol(t *testing.T, upstreamURL, protocol string) *testApp
 	if err := st.CreateModel(judge); err != nil {
 		t.Fatal(err)
 	}
-	if err := st.SetJudgeModel(judge.ID); err != nil {
+	judgeGrp := &store.ModelGroup{Name: "judge", Enabled: true}
+	if err := st.CreateModelGroup(judgeGrp); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.ReplaceGroupItems(judgeGrp.ID, []uint{judge.ID}); err != nil {
 		t.Fatal(err)
 	}
 	target := &store.Model{Name: "claude-3", ProviderID: prov.ID, Enabled: true}
@@ -92,7 +100,7 @@ func newTestAppWithProtocol(t *testing.T, upstreamURL, protocol string) *testApp
 	}
 	if err := st.UpdateRoutingConfig(&store.RoutingConfig{
 		ID:                 1,
-		JudgeModelID:       &judge.ID,
+		JudgeGroupID:       &judgeGrp.ID,
 		DefaultGroupID:     &grp.ID,
 		JudgeMaxInputChars: 2000,
 	}); err != nil {

@@ -11,7 +11,6 @@ import (
 
 // StoreDeps is the subset of *store.Store the engine needs.
 type StoreDeps interface {
-	GetJudgeModel() (*store.Model, error)
 	GetRoutingConfig() (*store.RoutingConfig, error)
 	ListEnabledModelGroups() ([]store.ModelGroup, error)
 	GetModelGroup(id uint) (*store.ModelGroup, error)
@@ -22,11 +21,15 @@ type StoreDeps interface {
 // Compile-time guarantee that *store.Store satisfies StoreDeps.
 var _ StoreDeps = (*store.Store)(nil)
 
-// JudgeClient invokes the judge model to pick a queue name.
-// Returns (content, usage, err): usage is the token usage of the judge call
-// (nil when the judge was not invoked or the call failed before parsing).
+// JudgeClient invokes the judge queue to pick a queue name.
+// Judge receives the ordered judge chain and returns:
+//   - raw:       the judge model's textual output
+//   - servedModel: the name of the judge model that actually succeeded
+//                  (after failover within the chain)
+//   - usage:     token usage of the successful judge call (nil on failure)
+//   - err:       non-nil when the whole judge chain is exhausted
 type JudgeClient interface {
-	Judge(judgeModel *store.Model, candidates []Candidate, userText string) (string, *model.Usage, error)
+	Judge(chain []*store.Model, candidates []Candidate, userText string) (raw string, servedModel string, usage *model.Usage, err error)
 }
 
 type Decision struct {
@@ -89,22 +92,34 @@ func (e *Engine) Route(req *model.ChatRequest) (*Decision, error) {
 		return &Decision{ModelName: req.Override, Model: chain[0], Models: chain, Reason: "override"}, nil
 	}
 
-	// 2. Judge: candidates are only enabled queues with non-empty chains
+	// 2. Judge: candidates are only enabled queues with non-empty chains,
+	// excluding the judge queue itself (it is for judging, not for serving).
 	rc, err := e.Store.GetRoutingConfig()
 	if err != nil {
 		return nil, fmt.Errorf("get routing config: %w", err)
 	}
-	judge, _ := e.Store.GetJudgeModel()
 	judgeName := ""
 	judgeRaw := ""
 	var judgeUsage *model.Usage
 	var judgeLatency time.Duration
-	if judge != nil {
-		judgeName = judge.Name
+
+	var judgeChain []*store.Model
+	if rc.JudgeGroupID != nil {
+		if g, gerr := e.Store.GetModelGroup(*rc.JudgeGroupID); gerr == nil && g != nil && g.Enabled {
+			if ch, cerr := e.Store.GetGroupChain(g.ID); cerr == nil && len(ch) > 0 {
+				judgeChain = toPtrChain(ch)
+			}
+		}
+	}
+
+	if len(judgeChain) > 0 {
 		groups, _ := e.Store.ListEnabledModelGroups()
 		cands := make([]Candidate, 0, len(groups))
 		known := make([]string, 0, len(groups))
 		for _, g := range groups {
+			if rc.JudgeGroupID != nil && g.ID == *rc.JudgeGroupID {
+				continue // exclude the judge queue itself
+			}
 			ch, err := e.Store.GetGroupChain(g.ID)
 			if err != nil || len(ch) == 0 {
 				continue
@@ -114,9 +129,10 @@ func (e *Engine) Route(req *model.ChatRequest) (*Decision, error) {
 		}
 		userText := TruncateUserText(req.LastUserMessage(), rc.JudgeMaxInputChars)
 		jStart := time.Now()
-		raw, usage, jerr := e.Judge.Judge(judge, cands, userText)
+		raw, servedName, usage, jerr := e.Judge.Judge(judgeChain, cands, userText)
 		judgeLatency = time.Since(jStart)
 		judgeUsage = usage
+		judgeName = servedName
 		switch {
 		case jerr != nil:
 			log.Printf("[WARN] judge call failed: %v", jerr)
@@ -127,7 +143,7 @@ func (e *Engine) Route(req *model.ChatRequest) (*Decision, error) {
 		default:
 			if picked := ParseJudgeOutput(raw, known); picked != "" {
 				if chain, err := e.resolveGroupChain(picked); err == nil {
-					return &Decision{ModelName: picked, Model: chain[0], Models: chain, Reason: "judge", JudgeRaw: raw, JudgeModel: judgeName, JudgeUsage: judgeUsage, JudgeLatency: judgeLatency}, nil
+					return &Decision{ModelName: picked, Model: chain[0], Models: chain, Reason: "judge", JudgeRaw: raw, JudgeModel: servedName, JudgeUsage: judgeUsage, JudgeLatency: judgeLatency}, nil
 				}
 			}
 			log.Printf("[WARN] judge output unparseable: %q", raw)

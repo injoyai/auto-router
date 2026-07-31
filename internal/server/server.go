@@ -1,6 +1,7 @@
 package server
 
 import (
+	"fmt"
 	"io/fs"
 	"net/http"
 	"strings"
@@ -112,7 +113,6 @@ func NewApp(cfg Config, st *store.Store, cryptoKey []byte, gatewayToken, adminTo
 	authAdmin.POST("/models", app.handleCreateModel)
 	authAdmin.PUT("/models/:id", app.handleUpdateModel)
 	authAdmin.DELETE("/models/:id", app.handleDeleteModel)
-	authAdmin.POST("/models/:id/judge", app.handleSetJudge)
 	authAdmin.POST("/models/:id/test", app.handleTestModel)
 	authAdmin.GET("/routing", app.handleGetRouting)
 	authAdmin.PUT("/routing", app.handleUpdateRouting)
@@ -138,13 +138,29 @@ type lazyJudge struct {
 // Compile-time guarantee that *lazyJudge satisfies routing.JudgeClient.
 var _ routing.JudgeClient = (*lazyJudge)(nil)
 
-func (l *lazyJudge) Judge(judgeModel *store.Model, candidates []routing.Candidate, userText string) (string, *model.Usage, error) {
-	prov, err := l.st.GetProvider(judgeModel.ProviderID)
-	if err != nil {
-		return "", nil, err
+// Judge 遍历判定队列链，逐模型解析 provider 并调用；首个成功（err==nil 且 raw != ""）
+// 即返回。全部失败时返回 "judge queue exhausted" 错误，引擎据此走兜底。
+func (l *lazyJudge) Judge(chain []*store.Model, candidates []routing.Candidate, userText string) (string, string, *model.Usage, error) {
+	var lastErr error
+	for _, jm := range chain {
+		prov, err := l.st.GetProvider(jm.ProviderID)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		apiKey, _ := store.Decrypt(l.key, prov.APIKey)
+		raw, usage, err := routing.NewJudgeClient(l.disp, prov.BaseURL, apiKey, prov.Protocol, prov.ProxyURL).Judge(jm, candidates, userText)
+		if err == nil && raw != "" {
+			return raw, jm.Name, usage, nil
+		}
+		if err != nil {
+			lastErr = err
+		}
 	}
-	apiKey, _ := store.Decrypt(l.key, prov.APIKey)
-	return routing.NewJudgeClient(l.disp, prov.BaseURL, apiKey, prov.Protocol, prov.ProxyURL).Judge(judgeModel, candidates, userText)
+	if lastErr == nil {
+		lastErr = fmt.Errorf("judge queue exhausted")
+	}
+	return "", "", nil, fmt.Errorf("judge queue exhausted: %w", lastErr)
 }
 
 // ServeSPA registers a NoRoute handler to serve the embedded React SPA.

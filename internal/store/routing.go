@@ -1,11 +1,9 @@
 package store
 
-import "gorm.io/gorm"
-
 type RoutingConfig struct {
 	ID                 uint  `gorm:"primaryKey" json:"id"`
-	JudgeModelID       *uint `json:"judge_model_id"`
-	DefaultGroupID     *uint `json:"default_group_id"` // default fallback queue
+	JudgeGroupID       *uint `json:"judge_group_id"`        // 判定队列，指向 ModelGroup
+	DefaultGroupID     *uint `json:"default_group_id"`      // default fallback queue
 	JudgeMaxInputChars int   `gorm:"default:2000" json:"judge_max_input_chars"`
 }
 
@@ -17,24 +15,9 @@ func (s *Store) GetRoutingConfig() (*RoutingConfig, error) {
 	return &rc, nil
 }
 
-// UpdateRoutingConfig saves the routing config singleton. I1: when JudgeModelID
-// is non-nil, it transactionally mirrors the selection onto models.is_judge
-// (clearing others) so the engine's GetJudgeModel() — the single source of
-// truth — honors admin updates via PUT /admin/routing. When JudgeModelID is
-// nil, is_judge is left untouched (e.g. a direct POST /admin/models/:id/judge
-// still works independently).
+// UpdateRoutingConfig saves the routing config singleton. 判定完全由
+// judge_group_id 驱动；旧 is_judge 镜像逻辑已随判定队列化移除。
 func (s *Store) UpdateRoutingConfig(rc *RoutingConfig) error {
 	rc.ID = 1
-	return s.DB.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Save(rc).Error; err != nil {
-			return err
-		}
-		if rc.JudgeModelID == nil {
-			return nil
-		}
-		if err := tx.Model(&Model{}).Where("1 = 1").Update("is_judge", false).Error; err != nil {
-			return err
-		}
-		return tx.Model(&Model{}).Where("id = ?", *rc.JudgeModelID).Update("is_judge", true).Error
-	})
+	return s.DB.Save(rc).Error
 }

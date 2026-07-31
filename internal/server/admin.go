@@ -351,28 +351,7 @@ func (a *App) handleUpdateModel(c *gin.Context) {
 
 func (a *App) handleDeleteModel(c *gin.Context) {
 	id, _ := strconv.Atoi(c.Param("id"))
-	// I10: reject deletion if the model is the judge or is referenced by
-	// routing_config.judge_model_id. Queue membership is a soft reference
-	// and is cascade-removed.
-	refs, err := a.Store.IsModelReferenced(uint(id))
-	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
-		return
-	}
-	if refs {
-		c.JSON(http.StatusConflict, gin.H{"error": "in use"})
-		return
-	}
 	if err := a.Store.DeleteModel(uint(id)); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-	c.JSON(http.StatusOK, gin.H{"ok": true})
-}
-
-func (a *App) handleSetJudge(c *gin.Context) {
-	id, _ := strconv.Atoi(c.Param("id"))
-	if err := a.Store.SetJudgeModel(uint(id)); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -389,7 +368,7 @@ func (a *App) handleGetRouting(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, gin.H{
 		"id":                  rc.ID,
-		"judge_model_id":      rc.JudgeModelID,
+		"judge_group_id":      rc.JudgeGroupID,
 		"default_group_id":    rc.DefaultGroupID,
 		"judge_max_input_chars": rc.JudgeMaxInputChars,
 		"gateway_token":       a.GatewayTokenValue(),
@@ -398,7 +377,7 @@ func (a *App) handleGetRouting(c *gin.Context) {
 
 func (a *App) handleUpdateRouting(c *gin.Context) {
 	var body struct {
-		JudgeModelID       *uint  `json:"judge_model_id"`
+		JudgeGroupID       *uint  `json:"judge_group_id"`
 		DefaultGroupID     *uint  `json:"default_group_id"`
 		JudgeMaxInputChars int    `json:"judge_max_input_chars"`
 		GatewayToken       string `json:"gateway_token"`
@@ -406,6 +385,13 @@ func (a *App) handleUpdateRouting(c *gin.Context) {
 	if err := c.ShouldBindJSON(&body); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
+	}
+	if body.JudgeGroupID != nil {
+		g, err := a.Store.GetModelGroup(*body.JudgeGroupID)
+		if err != nil || g == nil || !g.Enabled {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "judge group not found or disabled"})
+			return
+		}
 	}
 	if body.DefaultGroupID != nil {
 		g, err := a.Store.GetModelGroup(*body.DefaultGroupID)
@@ -416,7 +402,7 @@ func (a *App) handleUpdateRouting(c *gin.Context) {
 	}
 	rc := store.RoutingConfig{
 		ID:                 1,
-		JudgeModelID:       body.JudgeModelID,
+		JudgeGroupID:       body.JudgeGroupID,
 		DefaultGroupID:     body.DefaultGroupID,
 		JudgeMaxInputChars: body.JudgeMaxInputChars,
 	}
@@ -432,7 +418,7 @@ func (a *App) handleUpdateRouting(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, gin.H{
 		"id":                  rc.ID,
-		"judge_model_id":      rc.JudgeModelID,
+		"judge_group_id":      rc.JudgeGroupID,
 		"default_group_id":    rc.DefaultGroupID,
 		"judge_max_input_chars": rc.JudgeMaxInputChars,
 		"gateway_token":       a.GatewayTokenValue(),
