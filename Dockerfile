@@ -2,12 +2,14 @@
 FROM node:22-alpine AS web-builder
 WORKDIR /app/web
 COPY web/package.json web/package-lock.json ./
-RUN npm ci
+RUN npm ci --legacy-peer-deps
 COPY web/ ./
 RUN npm run build
 
 # ── Stage 2: Build backend (embeds frontend dist) ──
 FROM golang:1.25-alpine AS go-builder
+ARG GOPROXY=https://goproxy.cn,direct
+ENV GOPROXY=${GOPROXY}
 WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download

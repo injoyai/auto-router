@@ -30,7 +30,7 @@ const reasonLabels: Record<string, string> = {
 
 export default function Logs() {
   const [page, setPage] = useState(1)
-  const [pageSize, setPageSize] = useState(50)
+  const [pageSize, setPageSize] = useState(15)
   const [reason, setReason] = useState<string | undefined>()
   const [model, setModel] = useState<string | undefined>()
 

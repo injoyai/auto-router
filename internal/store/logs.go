@@ -43,10 +43,9 @@ func (s *Store) CreateLog(l *RequestLog) error {
 func (s *Store) ListLogs(page, pageSize int, reason, model string) ([]LogWithProvider, int64, error) {
 	var logs []LogWithProvider
 	var total int64
+	// 主查询：零 JOIN，避免同名模型导致重复行
 	q := s.DB.Table("request_logs").
-		Joins("LEFT JOIN models ON COALESCE(NULLIF(request_logs.served_model, ''), request_logs.routed_model) = models.name").
-		Joins("LEFT JOIN providers ON models.provider_id = providers.id").
-		Select("request_logs.*, providers.name as provider_name")
+		Select("request_logs.*")
 	if reason != "" {
 		q = q.Where("request_logs.route_reason = ?", reason)
 	}
@@ -61,7 +60,54 @@ func (s *Store) ListLogs(page, pageSize int, reason, model string) ([]LogWithPro
 		pageSize = 50
 	}
 	err := q.Order("request_logs.id desc").Offset((page - 1) * pageSize).Limit(pageSize).Find(&logs).Error
-	return logs, total, err
+	if err != nil {
+		return logs, total, err
+	}
+	// 批量回填 provider_name：仅查本页涉及的去重模型名，最多 pageSize 条
+	if len(logs) > 0 {
+		names := make(map[string]struct{})
+		for _, l := range logs {
+			n := l.ServedModel
+			if n == "" {
+				n = l.RoutedModel
+			}
+			if n != "" {
+				names[n] = struct{}{}
+			}
+		}
+		if len(names) > 0 {
+			list := make([]string, 0, len(names))
+			for n := range names {
+				list = append(list, n)
+			}
+			type row struct {
+				Name         string `gorm:"column:name"`
+				ProviderName string `gorm:"column:provider_name"`
+			}
+			var rows []row
+			s.DB.Table("models").
+				Select("models.name, providers.name as provider_name").
+				Joins("LEFT JOIN providers ON models.provider_id = providers.id").
+				Where("models.name IN ?", list).
+				Find(&rows)
+			m := make(map[string]string, len(rows))
+			for _, r := range rows {
+				if _, ok := m[r.Name]; !ok {
+					m[r.Name] = r.ProviderName
+				}
+			}
+			for i := range logs {
+				n := logs[i].ServedModel
+				if n == "" {
+					n = logs[i].RoutedModel
+				}
+				if n != "" {
+					logs[i].ProviderName = m[n]
+				}
+			}
+		}
+	}
+	return logs, total, nil
 }
 
 // TokenStatRow is one row of token aggregation.
