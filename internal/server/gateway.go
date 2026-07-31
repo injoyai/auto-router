@@ -85,6 +85,7 @@ func (a *App) handleChat(c *gin.Context, clientFmt string, parseInbound func(map
 	var retryCount int
 	var lastErr error
 	for i, m := range dec.Models {
+		dec.ServedModel = m.Name
 		prov, perr := a.Store.GetProvider(m.ProviderID)
 		if perr != nil {
 			lastErr = fmt.Errorf("provider not found for model %s", m.Name)
@@ -100,7 +101,6 @@ func (a *App) handleChat(c *gin.Context, clientFmt string, parseInbound func(map
 		}
 		resp, retryCount, err = a.Dispatcher.CallWithRetry(c.Request.Context(), prov.BaseURL, apiKey, prov.Protocol, body, prov.RetryMax, prov.RetryBackoffMs)
 		if err == nil {
-			dec.ServedModel = m.Name
 			dec.FailoverCount = i
 			break
 		}
@@ -147,6 +147,7 @@ func (a *App) streamResponse(c *gin.Context, dec *routing.Decision, req *model.C
 	var lastErr error
 	succeeded := false
 	for i, m := range dec.Models {
+		dec.ServedModel = m.Name
 		prov, perr := a.Store.GetProvider(m.ProviderID)
 		if perr != nil {
 			lastErr = fmt.Errorf("provider not found for model %s", m.Name)
@@ -183,7 +184,6 @@ func (a *App) streamResponse(c *gin.Context, dec *routing.Decision, req *model.C
 		})
 		retryCount = rc
 		if streamErr == nil {
-			dec.ServedModel = m.Name
 			dec.FailoverCount = i
 			succeeded = true
 			break

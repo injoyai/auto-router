@@ -120,6 +120,11 @@ func (s *Store) ReplaceGroupItems(groupID uint, modelIDs []uint) error {
 			return err
 		}
 		for i, mid := range uniq {
+			var m Model
+			if err := tx.First(&m, mid).Error; err != nil {
+				continue // model does not exist; skip to avoid dangling item
+			}
+			_ = m
 			if err := tx.Create(&ModelGroupItem{GroupID: groupID, ModelID: mid, Position: i}).Error; err != nil {
 				return err
 			}

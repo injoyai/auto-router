@@ -396,6 +396,13 @@ func (a *App) handleUpdateRouting(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	if body.DefaultGroupID != nil {
+		g, err := a.Store.GetModelGroup(*body.DefaultGroupID)
+		if err != nil || g == nil || !g.Enabled {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "default group not found or disabled"})
+			return
+		}
+	}
 	rc := store.RoutingConfig{
 		ID:                 1,
 		JudgeModelID:       body.JudgeModelID,
