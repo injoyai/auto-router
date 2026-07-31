@@ -22,7 +22,7 @@ internal/
   adapter/claude/            # Claude 协议适配
   store/                     # GORM 数据层 (Provider, Model, ModelGroup, RequestLog, RoutingConfig, Setting)
                              # dialer.go: Dialer 接口; sqlite_dialer.go / mysql_dialer.go: 驱动实现
-  routing/                   # 路由引擎 + 判定模型调用
+  routing/                   # 路由引擎 + 判定队列调用
   upstream/                  # 上游 HTTP 分发(含代理支持)
   server/                    # Gin 路由 + admin API + gateway 处理
 web/
@@ -41,8 +41,8 @@ web/
 - `HasAPIKey`: 表示是否已保存密钥
 
 ### Model (模型)
-- 字段: `Name`, `ProviderID`, `Enabled`, `IsJudge`
-- **已移除**: `DisplayName` (无用字段，已从前后端清除)
+- 字段: `Name`, `ProviderID`, `Enabled`
+- **已移除**: `DisplayName` (无用字段，已从前后端清除)；`IsJudge` (判定改为队列化，由 `RoutingConfig.JudgeGroupID` 指向 `ModelGroup`)
 
 ### ModelGroup (模型队列)
 - 字段: `Name`, `Remark`, `Enabled`
@@ -59,7 +59,7 @@ web/
 - Token 统计通过子查询关联 models+providers 解析服务商
 
 ### RoutingConfig
-- `JudgeModelID`, `DefaultGroupID`, `JudgeMaxInputChars`, `GatewayToken`
+- `JudgeGroupID`, `DefaultGroupID`, `JudgeMaxInputChars`, `GatewayToken`
 - 单例行 (ID=1)，首次启动自动 seed
 
 ## 关键决策
@@ -69,6 +69,17 @@ web/
 3. **服务商代理**: 每个 Provider 独立配置 `ProxyURL`，Dispatcher 按 proxy URL 缓存 HTTP Client
 4. **队列成员拖拽排序**: 前端原生 HTML5 拖拽 API，松手后调用 `ReplaceGroupItems` 保存
 5. **多数据库支持**: 通过 `Dialer` 接口抽象驱动差异（`internal/store/dialer.go`）。默认 SQLite，通过 `DB_DRIVER=mysql` 切换 MySQL（DSN 由 `DB_DSN` 提供）。`store.Open(dialer, dsn)` 仅保留通用逻辑（AutoMigrate + seed），驱动特定初始化（SQLite PRAGMA、MySQL 连接池）在各 Dialer 实现内。现有 SQL 均为 ANSI 标准，store 层查询代码零改动
+
+## 路由判定 (Judge Queue)
+
+路由判定由"单模型"改为"判定队列"（链式失败转移，方案 A）：
+
+- `RoutingConfig.JudgeGroupID` 指向 `ModelGroup`（旧 `JudgeModelID` 已删除），判定队列本身也是普通队列
+- `JudgeClient.Judge(chain, ...)` 签名接收有序 chain，返回 `(raw, servedModel, usage, err)`；逐模型失败转移封装在 `lazyJudge` 内
+- `defaultJudgeClient` 降级为内部辅助（不再实现 `JudgeClient` 接口），单模型签名不变
+- 构建候选队列时排除判定队列自身（`g.ID == *rc.JudgeGroupID`），避免自路由
+- **已删除**: `Model.IsJudge` 字段、`SetJudgeModel`/`GetJudgeModel`/`IsModelReferenced`、`POST /admin/models/:id/judge` 接口
+- **迁移**: `migrateLegacyJudge` 在 `store.Open` 中执行，以旧 `is_judge` 列为首选源迁移为 'judge' 队列并写入 `JudgeGroupID`，随后 DropColumn 删除 `is_judge` 与 `judge_model_id` 两列
 
 ## 踩坑记录
 
@@ -98,7 +109,7 @@ npm run build           # tsc + vite build -> dist/
 | `/` | Dashboard | 概览统计 |
 | `/sources` | Sources | 服务商 + 模型管理 |
 | `/queues` | Queues | 模型队列(含拖拽排序) |
-| `/routing` | Routing | 路由配置(判定模型/兜底队列/API Key) |
+| `/routing` | Routing | 路由配置(判定队列/兜底队列/API Key) |
 | `/tokens` | Tokens | Token 统计 |
 | `/logs` | Logs | 请求日志(含服务商列) |
 | `/login` | Login | 登录页 |
