@@ -14,8 +14,8 @@ type RequestLog struct {
 	LatencyMs        int64     `json:"latency_ms"`
 	Error            string    `json:"error"`
 	RetryCount       int    `json:"retry_count"`
-	ServedModel      string `json:"served_model"`   // 实际服务的模型名(队列=成功的那个)
-	FailoverCount    int    `json:"failover_count"` // 队列转移次数
+	ServedModel      string `json:"served_model"`   // actually served model name (queue = the successful one)
+	FailoverCount    int    `json:"failover_count"` // queue failover count
 	PromptTokens     int    `json:"prompt_tokens"`
 	CompletionTokens int       `json:"completion_tokens"`
 	TotalTokens      int       `json:"total_tokens"`
