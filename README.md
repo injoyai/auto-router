@@ -1,6 +1,12 @@
 # Auto Model Router
 
-AI 模型路由网关。请求到达时,由"判定模型"选择最合适的模型执行,支持 Agent 显式指定。对外兼容 OpenAI 协议。
+AI 模型路由网关。请求到达时,由"判定模型"选择最合适的模型队列执行,支持 Agent 显式指定。对外兼容 OpenAI 协议。
+
+## 核心概念
+
+- **服务商 (Provider)**:API 源,包含 Base URL、API Key、协议(OpenAI/Claude)、代理地址等配置。
+- **模型 (Model)**:隶属于某个服务商,是实际执行请求的单元。
+- **模型队列 (Queue)**:对外唯一可路由的目标,由一组有序模型组成。请求按队列内模型顺序依次尝试,失败自动转移。客户端在 `model` 字段中指定的是**队列名**。
 
 ## 快速开始
 
@@ -42,17 +48,28 @@ dev: false
 
 ## 使用
 
-1. 用 admin token 登录 `/admin/login`,添加 API 源(Provider)和模型。
-2. 设置一个模型为判定模型(`POST /admin/models/:id/judge`),设置默认兜底模型(`PUT /admin/routing`)。
-3. 客户端以 OpenAI 协议调用 `POST /v1/chat/completions`,`Authorization: Bearer <gateway token>`。
-   - `model` 留空 / `"auto"` / `"route"` → 自动路由
-   - `model` 设为具体模型名 -> 显式指定
-   - `X-Route-Model` 头 -> 强制指定模型(最高优先)
+1. 用 admin token 登录 `/admin/login`,添加服务商(Provider)和模型。
+2. 创建模型队列(Queue),将模型按优先级添加到队列中(支持拖拽排序)。
+3. 设置一个模型为判定模型(`POST /admin/models/:id/judge`),设置默认兜底队列(`PUT /admin/routing`)。
+4. 客户端以 OpenAI 协议调用 `POST /v1/chat/completions`,`Authorization: Bearer <gateway token>`。
+   - `model` 留空 / `"auto"` / `"route"` -> 自动路由(由判定模型选择队列)
+   - `model` 设为队列名 -> 显式指定队列
+   - `X-Route-Model` 头 -> 强制指定队列(最高优先)
 
 ## 路由模式
 
 | 模式 | 触发 | reason |
 |------|------|--------|
 | Agent 指定 | `model` 字段或 `X-Route-Model` 头 | override |
-| 自动路由 | 判定模型选择 | judge |
+| 自动路由 | 判定模型选择队列 | judge |
 | 兜底 | 判定失败 | fallback |
+
+## 功能特性
+
+- **模型队列**:聚合多个模型为具名队列,按序失败转移;队列内模型支持拖拽排序
+- **智能路由**:由判定模型根据用户任务自动选择最合适的队列
+- **多协议兼容**:同时支持 OpenAI 和 Claude 协议接入
+- **服务商代理**:每个服务商可独立配置代理地址,方便请求海外 API
+- **请求日志**:记录每次请求的路由决策、执行模型、服务商、Token 用量和耗时
+- **Token 统计**:按模型、按服务商聚合 Token 用量,辅助成本分析
+- **API Key 安全**:后端加密存储,前端掩码显示,编辑时支持查看明文
