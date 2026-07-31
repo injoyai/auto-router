@@ -15,7 +15,15 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	st, err := store.Open(store.SQLiteDialer{}, cfg.DBPath)
+	var dialer store.Dialer
+	dsn := cfg.DBPath
+	if cfg.DBDriver == "mysql" {
+		dialer = store.MySQLDialer{}
+		dsn = cfg.DBDSN
+	} else {
+		dialer = store.SQLiteDialer{}
+	}
+	st, err := store.Open(dialer, dsn)
 	if err != nil {
 		log.Fatal(err)
 	}
