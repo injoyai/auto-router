@@ -17,6 +17,15 @@ go build -o auto-router ./cmd
 
 首次启动会在 `./data/database/auto-router.db` 中生成并打印 gateway token 和 admin token。
 
+## Docker
+
+```bash
+docker build -t auto-router .
+docker run -p 8080:8080 -v $(pwd)/data:/app/data -v $(pwd)/config:/app/config auto-router
+```
+
+数据持久化挂载 `/app/data`（SQLite 数据库），配置挂载 `/app/config`（可选 `config.yaml`）。环境变量同样可用 `-e` 传入。
+
 ## 配置
 
 支持两种方式,优先级:**环境变量 > 配置文件 > 默认值**。

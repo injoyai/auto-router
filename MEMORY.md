@@ -103,6 +103,12 @@ go test ./...           # 测试
 npm run build           # tsc + vite build -> dist/
 
 # 前端改完必须重新编译，dist/ 通过 web.go 的 go:embed 嵌入二进制
+
+# Docker (多阶段构建)
+docker build -t auto-router .
+#   Stage 1: node:22-alpine → npm ci + npm run build → web/dist
+#   Stage 2: golang:1.25-alpine → CGO_ENABLED=0 go build (glebarez/sqlite 纯 Go 无需 CGO)
+#   Stage 3: alpine:3.21 + ca-certificates + tzdata, VOLUME /app/data /app/config
 ```
 
 ## 前端页面映射

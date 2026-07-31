@@ -1,0 +1,24 @@
+# Dependencies
+web/node_modules/
+
+# Build outputs (rebuilt in container)
+web/dist/
+
+# Runtime data
+data/
+config/
+
+# Version control
+.git/
+
+# IDE
+.vscode/
+.idea/
+
+# Existing binary
+auto-router
+auto-router.exe
+
+# OS files
+.DS_Store
+Thumbs.db
