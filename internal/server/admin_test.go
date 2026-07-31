@@ -151,3 +151,39 @@ func TestDeleteReferencedRejected(t *testing.T) {
 	app.Router.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusOK, w.Code)
 }
+
+func TestAdminGroupsCRUDAndItems(t *testing.T) {
+	app := newTestApp(t, startMockUpstream(t))
+	tok := adminToken(t, app)
+	h := func(method, path string, body any) *httptest.ResponseRecorder {
+		var buf *bytes.Buffer
+		if body != nil {
+			b, _ := json.Marshal(body)
+			buf = bytes.NewBuffer(b)
+		} else {
+			buf = bytes.NewBuffer(nil)
+		}
+		req := httptest.NewRequest(method, path, buf)
+		req.Header.Set("Authorization", "Bearer "+tok)
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		app.Router.ServeHTTP(w, req)
+		return w
+	}
+	w := h("POST", "/admin/groups", groupInput{Name: "q", DisplayName: "Q", Enabled: true})
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	ms, _ := app.Store.ListModels()
+	assert.NotEmpty(t, ms)
+	w = h("PUT", "/admin/groups/1/items", map[string]any{"items": []uint{ms[0].ID}})
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	w = h("GET", "/admin/groups/1/items", nil)
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Contains(t, w.Body.String(), "data")
+
+	defID := uint(1)
+	assert.NoError(t, app.Store.UpdateRoutingConfig(&store.RoutingConfig{ID: 1, DefaultGroupID: &defID, JudgeMaxInputChars: 1000}))
+	w = h("DELETE", "/admin/groups/1", nil)
+	assert.Equal(t, http.StatusConflict, w.Code)
+}

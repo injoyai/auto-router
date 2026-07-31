@@ -476,3 +476,121 @@ func tokenSumCompletion(rows []store.TokenStatRow) int64 {
 	}
 	return s
 }
+
+// ---- Model Groups (queues) ----
+
+type groupInput struct {
+	Name        string `json:"name"`
+	DisplayName string `json:"display_name"`
+	Description string `json:"description"`
+	Enabled     bool   `json:"enabled"`
+}
+
+func (a *App) handleListGroups(c *gin.Context) {
+	gs, err := a.Store.ListModelGroups()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	type groupWithCount struct {
+		store.ModelGroup
+		ItemCount int64 `json:"item_count"`
+	}
+	out := make([]groupWithCount, 0, len(gs))
+	for _, g := range gs {
+		var cnt int64
+		a.Store.DB.Model(&store.ModelGroupItem{}).Where("group_id = ?", g.ID).Count(&cnt)
+		out = append(out, groupWithCount{ModelGroup: g, ItemCount: cnt})
+	}
+	c.JSON(http.StatusOK, gin.H{"data": out})
+}
+
+func (a *App) handleCreateGroup(c *gin.Context) {
+	var in groupInput
+	if err := c.ShouldBindJSON(&in); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	g := store.ModelGroup{Name: in.Name, DisplayName: in.DisplayName, Description: in.Description, Enabled: in.Enabled}
+	if err := a.Store.CreateModelGroup(&g); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, g)
+}
+
+func (a *App) handleUpdateGroup(c *gin.Context) {
+	id, _ := strconv.Atoi(c.Param("id"))
+	g, err := a.Store.GetModelGroup(uint(id))
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
+		return
+	}
+	var in groupInput
+	if err := c.ShouldBindJSON(&in); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	g.Name = in.Name
+	g.DisplayName = in.DisplayName
+	g.Description = in.Description
+	g.Enabled = in.Enabled
+	if err := a.Store.UpdateModelGroup(g); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, g)
+}
+
+func (a *App) handleDeleteGroup(c *gin.Context) {
+	id, _ := strconv.Atoi(c.Param("id"))
+	rc, _ := a.Store.GetRoutingConfig()
+	if rc.DefaultGroupID != nil && *rc.DefaultGroupID == uint(id) {
+		c.JSON(http.StatusConflict, gin.H{"error": "in use as default"})
+		return
+	}
+	if err := a.Store.DeleteModelGroup(uint(id)); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
+type groupItemOut struct {
+	ID       uint         `json:"id"`
+	GroupID  uint         `json:"group_id"`
+	ModelID  uint         `json:"model_id"`
+	Position int          `json:"position"`
+	Model    *store.Model `json:"model"`
+}
+
+func (a *App) handleListGroupItems(c *gin.Context) {
+	id, _ := strconv.Atoi(c.Param("id"))
+	items, err := a.Store.GetGroupItemsOrdered(uint(id))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	out := make([]groupItemOut, 0, len(items))
+	for _, it := range items {
+		m, _ := a.Store.GetModel(it.ModelID)
+		out = append(out, groupItemOut{ID: it.ID, GroupID: it.GroupID, ModelID: it.ModelID, Position: it.Position, Model: m})
+	}
+	c.JSON(http.StatusOK, gin.H{"data": out})
+}
+
+func (a *App) handleReplaceGroupItems(c *gin.Context) {
+	id, _ := strconv.Atoi(c.Param("id"))
+	var body struct {
+		Items []uint `json:"items"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if err := a.Store.ReplaceGroupItems(uint(id), body.Items); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"ok": true})
+}

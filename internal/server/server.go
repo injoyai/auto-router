@@ -116,6 +116,12 @@ func NewApp(cfg Config, st *store.Store, cryptoKey []byte, gatewayToken, adminTo
 	authAdmin.POST("/models/:id/test", app.handleTestModel)
 	authAdmin.GET("/routing", app.handleGetRouting)
 	authAdmin.PUT("/routing", app.handleUpdateRouting)
+	authAdmin.GET("/groups", app.handleListGroups)
+	authAdmin.POST("/groups", app.handleCreateGroup)
+	authAdmin.PUT("/groups/:id", app.handleUpdateGroup)
+	authAdmin.DELETE("/groups/:id", app.handleDeleteGroup)
+	authAdmin.GET("/groups/:id/items", app.handleListGroupItems)
+	authAdmin.PUT("/groups/:id/items", app.handleReplaceGroupItems)
 	authAdmin.GET("/logs", app.handleListLogs)
 	authAdmin.GET("/stats", app.handleStats)
 	return app
