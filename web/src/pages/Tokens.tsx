@@ -28,9 +28,9 @@ export default function Tokens() {
     { title: '请求数', dataIndex: 'count', key: 'count', width: 100 },
     { title: '总Token', dataIndex: 'total_tokens', key: 'total_tokens', width: 120,
       render: (v: number) => v.toLocaleString() },
-    { title: 'Prompt', dataIndex: 'prompt_tokens', key: 'prompt_tokens', width: 120,
+    { title: '提示', dataIndex: 'prompt_tokens', key: 'prompt_tokens', width: 120,
       render: (v: number) => v.toLocaleString() },
-    { title: 'Completion', dataIndex: 'completion_tokens', key: 'completion_tokens', width: 120,
+    { title: '补全', dataIndex: 'completion_tokens', key: 'completion_tokens', width: 120,
       render: (v: number) => v.toLocaleString() },
     { title: '占比', key: 'percent', width: 80,
       render: (_: unknown, r: TokenStatRow) => tokensTotal > 0
@@ -39,13 +39,13 @@ export default function Tokens() {
   ]
 
   const providerColumns = [
-    { title: 'Provider', dataIndex: 'provider', key: 'provider' },
+    { title: '服务商', dataIndex: 'provider', key: 'provider' },
     { title: '请求数', dataIndex: 'count', key: 'count', width: 100 },
     { title: '总Token', dataIndex: 'total_tokens', key: 'total_tokens', width: 120,
       render: (v: number) => v.toLocaleString() },
-    { title: 'Prompt', dataIndex: 'prompt_tokens', key: 'prompt_tokens', width: 120,
+    { title: '提示', dataIndex: 'prompt_tokens', key: 'prompt_tokens', width: 120,
       render: (v: number) => v.toLocaleString() },
-    { title: 'Completion', dataIndex: 'completion_tokens', key: 'completion_tokens', width: 120,
+    { title: '补全', dataIndex: 'completion_tokens', key: 'completion_tokens', width: 120,
       render: (v: number) => v.toLocaleString() },
     { title: '占比', key: 'percent', width: 80,
       render: (_: unknown, r: TokenStatRow) => tokensTotal > 0
@@ -56,7 +56,7 @@ export default function Tokens() {
   return (
     <div>
       <div className="page-title">Token 统计</div>
-      <div className="page-subtitle">按模型和 Provider 维度查看 Token 消耗</div>
+      <div className="page-subtitle">按模型和服务商维度查看 Token 消耗</div>
 
       <Row gutter={[20, 20]} style={{ marginBottom: 20 }}>
         <Col span={8}>
@@ -68,13 +68,13 @@ export default function Tokens() {
         <Col span={8}>
           <Card className="stat-card stat-card--mint">
             <div className="stat-card-icon"><ThunderboltOutlined /></div>
-            <Statistic title="Prompt" value={formatTokens(tokensPrompt)} />
+            <Statistic title="提示" value={formatTokens(tokensPrompt)} />
           </Card>
         </Col>
         <Col span={8}>
           <Card className="stat-card stat-card--violet">
             <div className="stat-card-icon"><CheckCircleOutlined /></div>
-            <Statistic title="Completion" value={formatTokens(tokensCompletion)} />
+            <Statistic title="补全" value={formatTokens(tokensCompletion)} />
           </Card>
         </Col>
       </Row>
@@ -90,7 +90,7 @@ export default function Tokens() {
         />
       </Card>
 
-      <Card title="Provider 排行" className="aurora-card">
+      <Card title="服务商排行" className="aurora-card">
         <Table
           columns={providerColumns}
           dataSource={providerRows}

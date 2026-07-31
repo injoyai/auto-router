@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"crypto/subtle"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -10,6 +11,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"auto-router/internal/adapter/claude"
+	"auto-router/internal/adapter/openai"
+	"auto-router/internal/model"
 	"auto-router/internal/store"
 )
 
@@ -219,17 +223,26 @@ func (a *App) handleTestModel(c *gin.Context) {
 	} else if !ok {
 		errMsg = fmt.Sprintf("HTTP %d: %s", status, respBody)
 	}
+
+	// Parse the upstream response to extract token usage and the model's
+	// reply content for richer diagnostics. Falls back to zero values when the
+	// body cannot be parsed (e.g. truncated or non-JSON error bodies).
+	usage, reply := parseTestResponse(prov.Protocol, respBody)
+
 	// Persist a test log row so model connectivity checks show up in the
 	// logs page alongside normal request logs (route_reason="test").
 	_ = a.Store.CreateLog(&store.RequestLog{
-		SessionID:      fmt.Sprintf("test-model-%d", m.ID),
-		ClientProtocol: prov.Protocol,
-		RequestedModel: m.Name,
-		RoutedModel:    m.Name,
-		RouteReason:    "test",
-		Status:         status,
-		LatencyMs:      latency,
-		Error:          errMsg,
+		SessionID:        fmt.Sprintf("test-model-%d", m.ID),
+		ClientProtocol:   prov.Protocol,
+		RequestedModel:   m.Name,
+		RoutedModel:      m.Name,
+		RouteReason:      "test",
+		Status:           status,
+		LatencyMs:        latency,
+		Error:            errMsg,
+		PromptTokens:     usage.PromptTokens,
+		CompletionTokens: usage.CompletionTokens,
+		TotalTokens:      usage.TotalTokens,
 	})
 	resp := gin.H{
 		"ok":         ok,
@@ -239,7 +252,42 @@ func (a *App) handleTestModel(c *gin.Context) {
 	if !ok {
 		resp["error"] = errMsg
 	}
+	if usage.TotalTokens > 0 {
+		resp["usage"] = gin.H{
+			"prompt_tokens":     usage.PromptTokens,
+			"completion_tokens": usage.CompletionTokens,
+			"total_tokens":      usage.TotalTokens,
+		}
+	}
+	if reply != "" {
+		resp["reply"] = reply
+	}
 	c.JSON(http.StatusOK, resp)
+}
+
+// parseTestResponse extracts token usage and the assistant's reply content
+// from an upstream test response body. Returns zero values when the body
+// cannot be parsed (truncated, non-JSON, or error responses).
+func parseTestResponse(protocol, body string) (model.Usage, string) {
+	var raw map[string]any
+	if err := json.Unmarshal([]byte(body), &raw); err != nil {
+		return model.Usage{}, ""
+	}
+	var resp *model.ChatResponse
+	var err error
+	if protocol == "claude" {
+		resp, err = claude.ParseResponse(raw)
+	} else {
+		resp, err = openai.ParseResponse(raw)
+	}
+	if err != nil || resp == nil {
+		return model.Usage{}, ""
+	}
+	reply := ""
+	if len(resp.Choices) > 0 {
+		reply = resp.Choices[0].Message.Content
+	}
+	return resp.Usage, reply
 }
 
 // ---- Models ----

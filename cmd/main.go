@@ -26,8 +26,8 @@ func main() {
 	if cfg.GatewayToken != "" {
 		gwToken = cfg.GatewayToken
 	}
-	if cfg.AdminToken != "" {
-		adminToken = cfg.AdminToken
+	if cfg.Password != "" {
+		adminToken = cfg.Password
 	}
 	app := server.NewApp(cfg, st, key, gwToken, adminToken)
 

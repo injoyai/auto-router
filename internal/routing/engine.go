@@ -33,6 +33,7 @@ type Decision struct {
 	Model       *store.Model
 	Reason      string // override | judge | fallback
 	JudgeRaw    string
+	JudgeModel  string        // name of the judge model (empty if judge not invoked)
 	JudgeUsage  *model.Usage   // token usage of the judge call (nil if not called)
 	JudgeLatency time.Duration  // elapsed time of the judge call
 }
@@ -63,10 +64,12 @@ func (e *Engine) Route(req *model.ChatRequest) (*Decision, error) {
 	judge, _ := e.Store.GetJudgeModel()
 	// I4: track judge diagnostics so fallback Decisions still carry JudgeRaw
 	// for the request log, and log failures at warning level.
+	judgeName := ""
 	judgeRaw := ""
 	var judgeUsage *model.Usage
 	var judgeLatency time.Duration
 	if judge != nil {
+		judgeName = judge.Name
 		cands, _ := e.Store.ListEnabledModels()
 		userText := TruncateUserText(req.LastUserMessage(), rc.JudgeMaxInputChars)
 		jStart := time.Now()
@@ -87,7 +90,7 @@ func (e *Engine) Route(req *model.ChatRequest) (*Decision, error) {
 			}
 			if picked := ParseJudgeOutput(raw, known); picked != "" {
 				if m, err := e.Store.GetModelByName(picked); err == nil && m != nil {
-					return &Decision{ModelName: m.Name, Model: m, Reason: "judge", JudgeRaw: raw, JudgeUsage: judgeUsage, JudgeLatency: judgeLatency}, nil
+					return &Decision{ModelName: m.Name, Model: m, Reason: "judge", JudgeRaw: raw, JudgeModel: judgeName, JudgeUsage: judgeUsage, JudgeLatency: judgeLatency}, nil
 				}
 			}
 			log.Printf("[WARN] judge output unparseable: %q", raw)
@@ -98,7 +101,7 @@ func (e *Engine) Route(req *model.ChatRequest) (*Decision, error) {
 	// 3. Fallback to default model
 	if rc.DefaultModelID != nil {
 		if m, err := e.Store.GetModel(*rc.DefaultModelID); err == nil && m != nil {
-			return &Decision{ModelName: m.Name, Model: m, Reason: "fallback", JudgeRaw: judgeRaw, JudgeUsage: judgeUsage, JudgeLatency: judgeLatency}, nil
+			return &Decision{ModelName: m.Name, Model: m, Reason: "fallback", JudgeRaw: judgeRaw, JudgeModel: judgeName, JudgeUsage: judgeUsage, JudgeLatency: judgeLatency}, nil
 		}
 	}
 	return nil, fmt.Errorf("no model available and no default configured")

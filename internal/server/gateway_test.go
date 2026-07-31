@@ -75,11 +75,16 @@ func TestGatewayRequestedVsRoutedModel(t *testing.T) {
 	r.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
-	// Two logs: the judge_call entry and the user request entry (reason=judge).
+	// One merged log: the judge call is no longer a separate row; its
+	// diagnostics live on the single reason=judge entry.
 	logs, _, _ := app.Store.ListLogs(1, 10, "judge", "")
 	if assert.Len(t, logs, 1) {
 		assert.Equal(t, "auto", logs[0].RequestedModel)
 		assert.Equal(t, "gpt-4o", logs[0].RoutedModel)
 		assert.NotEqual(t, logs[0].RequestedModel, logs[0].RoutedModel)
+		// Judge diagnostics are inlined on the merged row.
+		assert.Equal(t, "judge-mini", logs[0].JudgeModel)
+		assert.NotEmpty(t, logs[0].JudgeRaw)
+		assert.Equal(t, 1, logs[0].JudgeTotalTokens)
 	}
 }

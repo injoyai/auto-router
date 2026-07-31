@@ -15,6 +15,12 @@ export interface RequestLog {
   prompt_tokens: number
   completion_tokens: number
   total_tokens: number
+  // Judge call diagnostics (populated only when the judge was invoked).
+  judge_model: string
+  judge_latency_ms: number
+  judge_prompt_tokens: number
+  judge_completion_tokens: number
+  judge_total_tokens: number
   created_at: string
 }
 

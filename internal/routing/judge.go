@@ -7,7 +7,11 @@ import (
 	"auto-router/internal/store"
 )
 
-const judgeSystemPrompt = `你是一个模型路由器。根据用户任务和可用模型列表,选择最合适的模型。只回复模型名称,不要解释。`
+const judgeSystemPrompt = `你是一个模型路由器。根据用户任务和可用模型列表,选择最合适的模型。
+回复格式(共三行,不要输出额外内容):
+- 第一行:模型名称(必须与列表中的某个名称完全一致)
+- 第二行:[任务] 一句话总结用户在做什么任务
+- 第三行:[理由] 一句话说明为什么选择该模型`
 
 // BuildJudgeMessages constructs the messages to send to the judge model.
 func BuildJudgeMessages(candidates []store.Model, userText string) []model.Message {
@@ -32,6 +36,10 @@ func BuildJudgeMessages(candidates []store.Model, userText string) []model.Messa
 
 // ParseJudgeOutput normalizes the judge model's reply and matches it against
 // known model names. Returns "" if no match.
+//
+// The judge is asked to put the model name on the first line and a brief
+// reason on subsequent lines. We prefer the first line for an exact match so
+// that a reason mentioning another model's name cannot cause a mismatch.
 func ParseJudgeOutput(raw string, known []string) string {
 	s := strings.TrimSpace(raw)
 	s = strings.Trim(s, "`\"' \n")
@@ -44,6 +52,17 @@ func ParseJudgeOutput(raw string, known []string) string {
 		s = strings.TrimSuffix(s, "```")
 		s = strings.TrimSpace(s)
 	}
+	// Prefer the first line as the model name (format: name + reason).
+	first := s
+	if i := strings.Index(s, "\n"); i >= 0 {
+		first = strings.TrimSpace(s[:i])
+	}
+	for _, k := range known {
+		if first == k {
+			return k
+		}
+	}
+	// full-text exact match (single-line replies)
 	for _, k := range known {
 		if s == k {
 			return k

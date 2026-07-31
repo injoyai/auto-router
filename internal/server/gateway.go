@@ -69,21 +69,6 @@ func (a *App) handleChat(c *gin.Context, clientFmt string, parseInbound func(map
 		return
 	}
 
-	// If the judge model was invoked, log its token usage as a separate entry
-	// so it shows up in token stats and request logs.
-	if dec.JudgeUsage != nil {
-		judgeModel, _ := a.Store.GetJudgeModel()
-		judgeName := ""
-		if judgeModel != nil {
-			judgeName = judgeModel.Name
-		}
-		a.writeLog(
-			&model.ChatRequest{SessionID: req.SessionID + "-judge", ClientFmt: req.ClientFmt},
-			&routing.Decision{ModelName: judgeName, Reason: "judge_call"},
-			judgeName, http.StatusOK, dec.JudgeLatency, "", 0, dec.JudgeUsage,
-		)
-	}
-
 	requestedModel := req.Model
 
 	prov, err := a.Store.GetProvider(dec.Model.ProviderID)
@@ -184,20 +169,31 @@ func (a *App) writeLog(req *model.ChatRequest, dec *routing.Decision, requestedM
 		completion = usage.CompletionTokens
 		total = usage.TotalTokens
 	}
+	var jPrompt, jCompletion, jTotal int
+	if dec.JudgeUsage != nil {
+		jPrompt = dec.JudgeUsage.PromptTokens
+		jCompletion = dec.JudgeUsage.CompletionTokens
+		jTotal = dec.JudgeUsage.TotalTokens
+	}
 	_ = a.Store.CreateLog(&store.RequestLog{
-		SessionID:        req.SessionID,
-		ClientProtocol:   req.ClientFmt,
-		RequestedModel:   requestedModel,
-		RoutedModel:      dec.ModelName,
-		RouteReason:      dec.Reason,
-		JudgeRaw:         dec.JudgeRaw,
-		Status:           status,
-		LatencyMs:        dur.Milliseconds(),
-		Error:            errMsg,
-		RetryCount:       retryCount,
-		PromptTokens:     prompt,
-		CompletionTokens: completion,
-		TotalTokens:      total,
+		SessionID:             req.SessionID,
+		ClientProtocol:        req.ClientFmt,
+		RequestedModel:        requestedModel,
+		RoutedModel:           dec.ModelName,
+		RouteReason:           dec.Reason,
+		JudgeRaw:              dec.JudgeRaw,
+		Status:                status,
+		LatencyMs:             dur.Milliseconds(),
+		Error:                 errMsg,
+		RetryCount:            retryCount,
+		PromptTokens:          prompt,
+		CompletionTokens:      completion,
+		TotalTokens:           total,
+		JudgeModel:            dec.JudgeModel,
+		JudgeLatencyMs:        dec.JudgeLatency.Milliseconds(),
+		JudgePromptTokens:     jPrompt,
+		JudgeCompletionTokens: jCompletion,
+		JudgeTotalTokens:      jTotal,
 	})
 }
 

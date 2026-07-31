@@ -5,7 +5,7 @@ AI 模型路由网关。请求到达时,由"判定模型"选择最合适的模�
 ## 快速开始
 
 ```bash
-go build -o auto-router ./cmd/router
+go build -o auto-router ./cmd
 ./auto-router
 ```
 
@@ -22,7 +22,7 @@ go build -o auto-router ./cmd/router
 | `LISTEN_ADDR` | `:8080` | 监听地址 |
 | `DB_PATH` | `./data/database/auto-router.db` | SQLite 路径 |
 | `GATEWAY_TOKEN` | 自动生成 | 客户端访问网关的 token(可覆盖) |
-| `ADMIN_TOKEN` | 自动生成 | 管理后台 token(可覆盖) |
+| `PASSWORD` | 自动生成 | 管理后台登录密码(可覆盖) |
 | `CONFIG_FILE` | `./config/config.yaml` | 配置文件路径(不存在则忽略) |
 | `DEV` | (未设置) | 任意非空值开启开发模式(CORS 放开) |
 
@@ -33,7 +33,7 @@ go build -o auto-router ./cmd/router
 ```yaml
 listen_addr: ":8080"
 db_path: "./data/database/auto-router.db"
-password: "your-admin-password"   # 管理后台登录密码(也可用 admin_token,二者等价,admin_token 优先)
+password: "your-admin-password"   # 管理后台登录密码
 gateway_token: "your-gateway-token"
 dev: false
 ```

@@ -1,5 +1,5 @@
 // Package web embeds the built React SPA located in web/dist.
-// The embed directive lives in this package (not cmd/router) because
+// The embed directive lives in this package (not cmd) because
 // //go:embed paths are resolved relative to the source file's directory,
 // so `dist` here correctly points to web/dist.
 package web

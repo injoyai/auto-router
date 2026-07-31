@@ -33,11 +33,19 @@ export async function setJudgeModel(id: number): Promise<void> {
   await apiClient.post(`/admin/models/${id}/judge`)
 }
 
+export interface ModelTestUsage {
+  prompt_tokens: number
+  completion_tokens: number
+  total_tokens: number
+}
+
 export interface ModelTestResult {
   ok: boolean
   status: number
   latency_ms: number
   error?: string
+  usage?: ModelTestUsage
+  reply?: string
 }
 
 export async function testModel(id: number): Promise<ModelTestResult> {

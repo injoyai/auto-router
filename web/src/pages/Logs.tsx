@@ -70,7 +70,7 @@ export default function Logs() {
     { title: '请求模型', dataIndex: 'requested_model', key: 'requested_model', width: 120 },
     { title: '路由模型', dataIndex: 'routed_model', key: 'routed_model', width: 120 },
     {
-      title: '路由原因', dataIndex: 'route_reason', key: 'route_reason', width: 100,
+      title: '路由类型', dataIndex: 'route_reason', key: 'route_reason', width: 100,
       render: (v: string) => <Tag color={reasonColors[v] ?? 'default'}>{reasonLabels[v] ?? v}</Tag>,
     },
     {
@@ -102,7 +102,7 @@ export default function Logs() {
       <Card size="small" className="filter-card" style={{ marginBottom: 16 }}>
         <Space wrap>
           <Select
-            placeholder="路由原因"
+            placeholder="路由类型"
             allowClear
             style={{ width: 140 }}
             value={reason}
@@ -110,7 +110,6 @@ export default function Logs() {
             options={[
               { value: 'override', label: '指定路由' },
               { value: 'judge', label: '智能路由' },
-              { value: 'judge_call', label: '判定调用' },
               { value: 'fallback', label: '兜底路由' },
               { value: 'test', label: '测试' },
             ]}
@@ -135,16 +134,33 @@ export default function Logs() {
         loading={isLoading}
         scroll={{ x: 1200 }}
         expandable={{
-          expandedRowRender: (r: RequestLog) => (
-            r.judge_raw ? (
-              <pre style={{ whiteSpace: 'pre-wrap', fontFamily: "'JetBrains Mono', monospace", fontSize: 13, background: '#f8f9fc', padding: 16, borderRadius: 12, border: '1px solid #f1f2f8' }}>
-                {r.judge_raw}
-              </pre>
-            ) : (
-              <p style={{ color: '#9fa1b5' }}>无判定原始数据</p>
+          expandedRowRender: (r: RequestLog) => {
+            const hasJudge = !!r.judge_model
+            const hasRaw = !!r.judge_raw
+            if (!hasJudge && !hasRaw) {
+              return <p style={{ color: '#9fa1b5' }}>无判定数据</p>
+            }
+            return (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {hasJudge && (
+                  <div style={{ display: 'flex', gap: 28, flexWrap: 'wrap', fontSize: 13, color: '#6a604c' }}>
+                    <span><strong style={{ color: '#4e4636' }}>判定模型:</strong> {r.judge_model}</span>
+                    <span><strong style={{ color: '#4e4636' }}>判定耗时:</strong> {formatLatency(r.judge_latency_ms)}</span>
+                    <span>
+                      <strong style={{ color: '#4e4636' }}>判定 Token:</strong>
+                      {' '}提示 {r.judge_prompt_tokens} / 补全 {r.judge_completion_tokens} / 合计 {r.judge_total_tokens}
+                    </span>
+                  </div>
+                )}
+                {hasRaw && (
+                  <pre style={{ whiteSpace: 'pre-wrap', fontFamily: "'JetBrains Mono', monospace", fontSize: 13, background: '#f8f9fc', padding: 16, borderRadius: 12, border: '1px solid #f1f2f8', margin: 0 }}>
+                    {r.judge_raw}
+                  </pre>
+                )}
+              </div>
             )
-          ),
-          rowExpandable: (r: RequestLog) => !!r.judge_raw,
+          },
+          rowExpandable: (r: RequestLog) => !!r.judge_raw || !!r.judge_model,
         }}
         pagination={{
           current: page,

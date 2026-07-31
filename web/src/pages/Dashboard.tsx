@@ -3,13 +3,11 @@ import { Pie } from '@ant-design/charts'
 import {
   ThunderboltOutlined,
   CheckCircleOutlined,
-  AppstoreOutlined,
   ClockCircleOutlined,
   FireOutlined,
 } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
 import { getStats, listLogs } from '../api/logs'
-import { listModels } from '../api/models'
 
 export default function Dashboard() {
   const { data: stats, isLoading: statsLoading, isError: statsError } = useQuery({
@@ -17,21 +15,16 @@ export default function Dashboard() {
     queryFn: getStats,
   })
 
-  const { data: models, isLoading: modelsLoading, isError: modelsError } = useQuery({
-    queryKey: ['models'],
-    queryFn: listModels,
-  })
-
   const { data: logsData, isLoading: logsLoading, isError: logsError } = useQuery({
     queryKey: ['logs', 'dashboard'],
     queryFn: () => listLogs({ page: 1, page_size: 200 }),
   })
 
-  if (statsLoading || logsLoading || modelsLoading) {
+  if (statsLoading || logsLoading) {
     return <Spin size="large" style={{ display: 'block', marginTop: 100 }} />
   }
 
-  if (statsError || logsError || modelsError) {
+  if (statsError || logsError) {
     return (
       <Card className="aurora-card">
         <p style={{ color: '#d05a4a', textAlign: 'center', padding: 40 }}>
@@ -50,7 +43,8 @@ export default function Dashboard() {
     ? Math.round(logs.reduce((sum, l) => sum + l.latency_ms, 0) / logs.length)
     : 0
 
-  const activeModelCount = models?.filter((m) => m.enabled).length ?? 0
+  const tokensTotal = stats?.tokens?.total ?? 0
+  const formatTokens = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : `${n}`)
 
   const reasonLabels: Record<string, string> = {
     override: '指定路由',
@@ -63,12 +57,6 @@ export default function Dashboard() {
     type: reasonLabels[r.Reason] ?? r.Reason,
     value: r.Count,
   }))
-
-  const tokensTotal = stats?.tokens?.total ?? 0
-  const tokensPrompt = stats?.tokens?.prompt ?? 0
-  const tokensCompletion = stats?.tokens?.completion ?? 0
-
-  const formatTokens = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : `${n}`)
 
   const tokenPieData = (stats?.by_model ?? []).map((r) => ({
     type: r.model,
@@ -104,8 +92,8 @@ export default function Dashboard() {
         </Col>
         <Col span={6} className="aurora-fade-in aurora-fade-in-3">
           <Card className="stat-card stat-card--violet">
-            <div className="stat-card-icon"><AppstoreOutlined /></div>
-            <Statistic title="活跃模型数" value={activeModelCount} />
+            <div className="stat-card-icon"><FireOutlined /></div>
+            <Statistic title="Token 消耗" value={formatTokens(tokensTotal)} />
           </Card>
         </Col>
         <Col span={6} className="aurora-fade-in aurora-fade-in-4">
@@ -115,29 +103,9 @@ export default function Dashboard() {
           </Card>
         </Col>
       </Row>
-      <Row gutter={[20, 20]} style={{ marginBottom: 20 }}>
-        <Col span={8} className="aurora-fade-in aurora-fade-in-1">
-          <Card className="stat-card stat-card--indigo">
-            <div className="stat-card-icon"><FireOutlined /></div>
-            <Statistic title="Token 消耗" value={formatTokens(tokensTotal)} />
-          </Card>
-        </Col>
-        <Col span={8} className="aurora-fade-in aurora-fade-in-2">
-          <Card className="stat-card stat-card--mint">
-            <div className="stat-card-icon"><ThunderboltOutlined /></div>
-            <Statistic title="Prompt" value={formatTokens(tokensPrompt)} />
-          </Card>
-        </Col>
-        <Col span={8} className="aurora-fade-in aurora-fade-in-3">
-          <Card className="stat-card stat-card--violet">
-            <div className="stat-card-icon"><CheckCircleOutlined /></div>
-            <Statistic title="Completion" value={formatTokens(tokensCompletion)} />
-          </Card>
-        </Col>
-      </Row>
       <Row gutter={20}>
         <Col span={12} className="aurora-fade-in aurora-fade-in-3">
-          <Card title="路由原因分布" className="aurora-card">
+          <Card title="路由类型分布" className="aurora-card">
             {pieData.length > 0 ? (
               <Pie {...pieConfig} />
             ) : (

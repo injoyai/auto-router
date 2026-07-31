@@ -354,11 +354,29 @@ export default function Sources() {
         >
           {modelTestLoading && <p>正在测试...</p>}
           {modelTestResult && (
-            <Result
-              status={modelTestResult.ok ? 'success' : 'error'}
-              title={modelTestResult.ok ? '模型可用' : '模型不可用'}
-              subTitle={modelTestResult.ok ? `耗时 ${modelTestResult.latency_ms}ms` : (modelTestResult.error ?? `HTTP ${modelTestResult.status}`)}
-            />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <Result
+                status={modelTestResult.ok ? 'success' : 'error'}
+                title={modelTestResult.ok ? '模型可用' : '模型不可用'}
+                subTitle={modelTestResult.ok ? `耗时 ${modelTestResult.latency_ms}ms` : (modelTestResult.error ?? `HTTP ${modelTestResult.status}`)}
+                style={{ padding: '12px 0' }}
+              />
+              {modelTestResult.ok && modelTestResult.usage && (
+                <div style={{ display: 'flex', gap: 24, justifyContent: 'center', fontSize: 13, color: '#6a604c' }}>
+                  <span><strong style={{ color: '#4e4636' }}>提示:</strong> {modelTestResult.usage.prompt_tokens}</span>
+                  <span><strong style={{ color: '#4e4636' }}>补全:</strong> {modelTestResult.usage.completion_tokens}</span>
+                  <span><strong style={{ color: '#4e4636' }}>合计:</strong> {modelTestResult.usage.total_tokens}</span>
+                </div>
+              )}
+              {modelTestResult.ok && modelTestResult.reply && (
+                <div>
+                  <div style={{ fontSize: 12, color: '#8a7f66', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>模型回复</div>
+                  <pre style={{ whiteSpace: 'pre-wrap', fontFamily: "'JetBrains Mono', monospace", fontSize: 13, background: '#f8f9fc', padding: 12, borderRadius: 10, border: '1px solid #f1f2f8', margin: 0 }}>
+                    {modelTestResult.reply}
+                  </pre>
+                </div>
+              )}
+            </div>
           )}
         </Modal>
       </div>

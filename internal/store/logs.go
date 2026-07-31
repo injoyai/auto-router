@@ -17,7 +17,15 @@ type RequestLog struct {
 	PromptTokens     int       `json:"prompt_tokens"`
 	CompletionTokens int       `json:"completion_tokens"`
 	TotalTokens      int       `json:"total_tokens"`
-	CreatedAt        time.Time `json:"created_at"`
+	// Judge call diagnostics. Populated only when the judge model was invoked
+	// (auto routing). Kept separate from the main token fields so that judge
+	// overhead does not inflate the execution model's token stats.
+	JudgeModel            string    `json:"judge_model"`
+	JudgeLatencyMs        int64     `json:"judge_latency_ms"`
+	JudgePromptTokens     int       `json:"judge_prompt_tokens"`
+	JudgeCompletionTokens int       `json:"judge_completion_tokens"`
+	JudgeTotalTokens      int       `json:"judge_total_tokens"`
+	CreatedAt             time.Time `json:"created_at"`
 }
 
 func (s *Store) CreateLog(l *RequestLog) error {
