@@ -1,5 +1,5 @@
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
-import { Layout as AntLayout, Menu, Button } from 'antd'
+import { Layout as AntLayout, Menu } from 'antd'
 import {
   DashboardOutlined,
   AppstoreOutlined,
@@ -13,6 +13,8 @@ import {
 
 const { Sider, Content } = AntLayout
 
+const LOGOUT_KEY = '__logout__'
+
 const menuItems = [
   { key: '/', icon: <DashboardOutlined />, label: '仪表盘' },
   { key: '/sources', icon: <AppstoreOutlined />, label: '模型管理' },
@@ -20,6 +22,8 @@ const menuItems = [
   { key: '/routing', icon: <SettingOutlined />, label: '路由配置' },
   { key: '/logs', icon: <FileTextOutlined />, label: '请求日志' },
   { key: '/tokens', icon: <FireOutlined />, label: 'Token 统计' },
+  { type: 'divider' as const, className: 'aurora-menu-divider' },
+  { key: LOGOUT_KEY, icon: <LogoutOutlined />, label: '退出登录', danger: true, className: 'aurora-menu-logout' },
 ]
 
 export default function Layout() {
@@ -31,6 +35,14 @@ export default function Layout() {
   const handleLogout = () => {
     localStorage.removeItem('admin_jwt')
     navigate('/login')
+  }
+
+  const onMenuClick = ({ key }: { key: string }) => {
+    if (key === LOGOUT_KEY) {
+      handleLogout()
+      return
+    }
+    navigate(key)
   }
 
   return (
@@ -48,13 +60,8 @@ export default function Layout() {
           theme="light"
           selectedKeys={[selectedKey]}
           items={menuItems}
-          onClick={({ key }) => navigate(key)}
+          onClick={onMenuClick}
         />
-        <div className="aurora-sidebar-foot">
-          <Button icon={<LogoutOutlined />} block onClick={handleLogout} className="aurora-logout">
-            退出登录
-          </Button>
-        </div>
       </Sider>
       <AntLayout>
         <Content className="aurora-content" style={{ padding: '40px 44px' }}>

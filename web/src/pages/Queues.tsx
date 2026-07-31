@@ -59,9 +59,9 @@ export default function Queues() {
   const providerName = (model: Model) => providerMap.get(model.provider_id)?.name ?? '-'
   const modelMap = new Map<number, Model>(enabledModels.map((m) => [m.id, m]))
 
-  // 加载所有队列的成员
+  // 加载所有队列的成员（需等 groups 和 models 都就绪，否则 enabledModels 为空会导致全部被 filter 掉）
   useEffect(() => {
-    if (!groups) return
+    if (!groups || !models) return
     groups.forEach(async (g) => {
       if (rowModels[g.id]) return
       try {
@@ -71,7 +71,7 @@ export default function Queues() {
         setRowModels((prev) => ({ ...prev, [g.id]: ids }))
       } catch { /* skip */ }
     })
-  }, [groups])
+  }, [groups, models])
 
   // 添加模型到队列
   const addModel = (g: ModelGroup, modelId: number) => {

@@ -117,6 +117,13 @@ h1, h2, h3, h4, h5, h6 {
   overflow: hidden;
 }
 
+/* antd Sider 内部包裹层 - 必须也是 flex column 才能把布局链传到菜单 */
+.aurora-sidebar .ant-layout-sider-children {
+  display: flex !important;
+  flex-direction: column !important;
+  height: 100% !important;
+}
+
 .aurora-brand {
   font-family: var(--font-display) !important;
   font-size: 20px;
@@ -156,7 +163,7 @@ h1, h2, h3, h4, h5, h6 {
   flex-shrink: 0;
 }
 
-/* 菜单 - 占据剩余空间，自身可滚动 */
+/* 菜单 - 占据剩余空间，自身可滚动；flex column 让退出登录贴底 */
 .aurora-sidebar .ant-menu {
   background: transparent !important;
   border-right: none !important;
@@ -165,6 +172,8 @@ h1, h2, h3, h4, h5, h6 {
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
+  display: flex !important;
+  flex-direction: column !important;
 }
 
 .aurora-sidebar .ant-menu-item {
@@ -191,63 +200,32 @@ h1, h2, h3, h4, h5, h6 {
 
 .aurora-sidebar .ant-menu-item .anticon { font-size: 16px !important; }
 
-/* 侧边栏底部 - 退出登录区域 */
-.aurora-sidebar-foot {
-  flex-shrink: 0;
-  padding: 16px 16px 20px;
-  border-top: 1px solid var(--sand-100);
-  background: linear-gradient(to bottom, rgba(250, 248, 243, 0) 0%, rgba(250, 248, 243, 0.55) 60%);
-  position: relative;
+/* 菜单分隔线 - 渐变柔和，紧贴退出登录上方；margin-top:auto 推到菜单底部 */
+.aurora-sidebar .aurora-menu-divider.ant-menu-item-divider {
+  border: none !important;
+  height: 1px !important;
+  background: linear-gradient(to right, transparent, var(--sand-200) 20%, var(--sand-200) 80%, transparent) !important;
+  margin: auto 10px 0 10px !important;
 }
 
-.aurora-sidebar-foot::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 16px;
-  right: 16px;
-  height: 1px;
-  background: linear-gradient(to right, transparent, var(--glass-border), transparent);
+/* 退出登录菜单项 - 紧贴分隔线下方，底部留呼吸空间 */
+.aurora-sidebar .aurora-menu-logout.ant-menu-item {
+  color: var(--sand-500) !important;
+  margin: 6px 0 20px 0 !important;
 }
 
-/* 退出按钮 - 高级毛玻璃 + 悬浮危险态 */
-.aurora-logout {
-  position: relative;
-  background: var(--glass-bg) !important;
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
-  border: 1px solid var(--sand-200) !important;
-  color: var(--sand-600) !important;
-  font-weight: 600;
-  font-size: 13px;
-  letter-spacing: 0.01em;
-  border-radius: var(--radius-md) !important;
-  height: 44px !important;
-  box-shadow: var(--shadow-xs);
-  transition: all 0.28s cubic-bezier(0.4, 0, 0.2, 1) !important;
-  overflow: hidden;
-}
-
-.aurora-logout .anticon {
-  transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
-  font-size: 15px !important;
-}
-
-.aurora-logout:hover {
-  border-color: var(--red) !important;
+.aurora-sidebar .aurora-menu-logout.ant-menu-item:hover {
   color: var(--red) !important;
   background: var(--red-light) !important;
-  box-shadow: 0 10px 24px rgba(208, 90, 74, 0.22) !important;
-  transform: translateY(-2px);
-}
-
-.aurora-logout:hover .anticon {
   transform: translateX(3px);
 }
 
-.aurora-logout:active {
-  transform: translateY(0);
-  box-shadow: 0 4px 12px rgba(208, 90, 74, 0.18) !important;
+.aurora-sidebar .aurora-menu-logout.ant-menu-item .anticon {
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.aurora-sidebar .aurora-menu-logout.ant-menu-item:hover .anticon {
+  transform: translateX(3px);
 }
 
 /* ============================================
