@@ -30,7 +30,7 @@ func startMockUpstream(t *testing.T) string {
 		_ = json.NewDecoder(r.Body).Decode(&body)
 		content := "hello"
 		if m, _ := body["model"].(string); m == "judge-mini" {
-			content = "gpt-4o"
+			content = "deepseek-v4-flash"
 		}
 		w.Header().Set("Content-Type", "application/json")
 		io.WriteString(w, `{"model":"gpt-4o","choices":[{"index":0,"message":{"role":"assistant","content":"`+content+`"},"finish_reason":"stop"}],"usage":{"total_tokens":1}}`)
@@ -80,7 +80,7 @@ func TestGatewayRequestedVsRoutedModel(t *testing.T) {
 	logs, _, _ := app.Store.ListLogs(1, 10, "judge", "")
 	if assert.Len(t, logs, 1) {
 		assert.Equal(t, "auto", logs[0].RequestedModel)
-		assert.Equal(t, "gpt-4o", logs[0].RoutedModel)
+		assert.Equal(t, "deepseek-v4-flash", logs[0].RoutedModel)
 		assert.NotEqual(t, logs[0].RequestedModel, logs[0].RoutedModel)
 		// Judge diagnostics are inlined on the merged row.
 		assert.Equal(t, "judge-mini", logs[0].JudgeModel)

@@ -4,19 +4,24 @@ import (
 	"strings"
 
 	"auto-router/internal/model"
-	"auto-router/internal/store"
 )
 
-const judgeSystemPrompt = `你是一个模型路由器。根据用户任务和可用模型列表,选择最合适的模型。
+// Candidate is a routable candidate (a queue) presented to the judge.
+type Candidate struct {
+	Name        string
+	Description string
+}
+
+const judgeSystemPrompt = `你是一个模型路由器。根据用户任务和可用队列列表,选择最合适的队列。
 回复格式(共三行,不要输出额外内容):
-- 第一行:模型名称(必须与列表中的某个名称完全一致)
+- 第一行:队列名称(必须与列表中的某个名称完全一致)
 - 第二行:[任务] 一句话总结用户在做什么任务
-- 第三行:[理由] 一句话说明为什么选择该模型`
+- 第三行:[理由] 一句话说明为什么选择该队列`
 
 // BuildJudgeMessages constructs the messages to send to the judge model.
-func BuildJudgeMessages(candidates []store.Model, userText string) []model.Message {
+func BuildJudgeMessages(candidates []Candidate, userText string) []model.Message {
 	var sb strings.Builder
-	sb.WriteString("可用模型列表:\n")
+	sb.WriteString("可用队列列表:\n")
 	for _, c := range candidates {
 		sb.WriteString("- ")
 		sb.WriteString(c.Name)

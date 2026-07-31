@@ -22,7 +22,7 @@ func startStreamingUpstream(t *testing.T) string {
 		_ = json.NewDecoder(r.Body).Decode(&body)
 		if m, _ := body["model"].(string); m == "judge-mini" {
 			w.Header().Set("Content-Type", "application/json")
-			io.WriteString(w, `{"model":"gpt-4o","choices":[{"index":0,"message":{"role":"assistant","content":"gpt-4o"},"finish_reason":"stop"}],"usage":{"total_tokens":1}}`)
+			io.WriteString(w, `{"model":"deepseek-v4-flash","choices":[{"index":0,"message":{"role":"assistant","content":"deepseek-v4-flash"},"finish_reason":"stop"}],"usage":{"total_tokens":1}}`)
 			return
 		}
 		w.Header().Set("Content-Type", "text/event-stream")
@@ -37,7 +37,7 @@ func startStreamingUpstream(t *testing.T) string {
 func TestEndToEndOverrideSkipsRouting(t *testing.T) {
 	url := startMockUpstream(t)
 	app := newTestApp(t, url)
-	body := `{"model":"gpt-4o","messages":[{"role":"user","content":"hi"}]}`
+	body := `{"model":"deepseek-v4-flash","messages":[{"role":"user","content":"hi"}]}`
 	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", bytes.NewBufferString(body))
 	req.Header.Set("Authorization", "Bearer "+app.GatewayToken)
 	req.Header.Set("Content-Type", "application/json")

@@ -132,7 +132,7 @@ type lazyJudge struct {
 // Compile-time guarantee that *lazyJudge satisfies routing.JudgeClient.
 var _ routing.JudgeClient = (*lazyJudge)(nil)
 
-func (l *lazyJudge) Judge(judgeModel *store.Model, candidates []store.Model, userText string) (string, *model.Usage, error) {
+func (l *lazyJudge) Judge(judgeModel *store.Model, candidates []routing.Candidate, userText string) (string, *model.Usage, error) {
 	prov, err := l.st.GetProvider(judgeModel.ProviderID)
 	if err != nil {
 		return "", nil, err
