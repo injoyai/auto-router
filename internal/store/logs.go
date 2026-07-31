@@ -44,8 +44,7 @@ func (s *Store) ListLogs(page, pageSize int, reason, model string) ([]LogWithPro
 	var logs []LogWithProvider
 	var total int64
 	// 主查询：零 JOIN，避免同名模型导致重复行
-	q := s.DB.Table("request_logs").
-		Select("request_logs.*")
+	q := s.DB.Table("request_logs")
 	if reason != "" {
 		q = q.Where("request_logs.route_reason = ?", reason)
 	}
