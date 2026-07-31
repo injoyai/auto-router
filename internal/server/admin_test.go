@@ -123,7 +123,7 @@ func TestDeleteReferencedRejected(t *testing.T) {
 	app.Router.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusConflict, w.Code)
 
-	// Delete model id=2 (原默认模型;DefaultModelID 检查已移除,不再阻塞) -> 200
+	// Delete model id=2 (former default model; default check removed, no longer blocks) -> 200
 	req = httptest.NewRequest(http.MethodDelete, "/admin/models/2", nil)
 	req.Header.Set("Authorization", "Bearer "+tok)
 	w = httptest.NewRecorder()

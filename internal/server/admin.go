@@ -379,7 +379,7 @@ func (a *App) handleGetRouting(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"id":                  rc.ID,
 		"judge_model_id":      rc.JudgeModelID,
-		"default_model_id":    rc.DefaultModelID,
+		"default_group_id":    rc.DefaultGroupID,
 		"judge_max_input_chars": rc.JudgeMaxInputChars,
 		"gateway_token":       a.GatewayTokenValue(),
 	})
@@ -388,7 +388,7 @@ func (a *App) handleGetRouting(c *gin.Context) {
 func (a *App) handleUpdateRouting(c *gin.Context) {
 	var body struct {
 		JudgeModelID       *uint  `json:"judge_model_id"`
-		DefaultModelID     *uint  `json:"default_model_id"`
+		DefaultGroupID     *uint  `json:"default_group_id"`
 		JudgeMaxInputChars int    `json:"judge_max_input_chars"`
 		GatewayToken       string `json:"gateway_token"`
 	}
@@ -399,7 +399,7 @@ func (a *App) handleUpdateRouting(c *gin.Context) {
 	rc := store.RoutingConfig{
 		ID:                 1,
 		JudgeModelID:       body.JudgeModelID,
-		DefaultModelID:     body.DefaultModelID,
+		DefaultGroupID:     body.DefaultGroupID,
 		JudgeMaxInputChars: body.JudgeMaxInputChars,
 	}
 	if err := a.Store.UpdateRoutingConfig(&rc); err != nil {
@@ -415,7 +415,7 @@ func (a *App) handleUpdateRouting(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"id":                  rc.ID,
 		"judge_model_id":      rc.JudgeModelID,
-		"default_model_id":    rc.DefaultModelID,
+		"default_group_id":    rc.DefaultGroupID,
 		"judge_max_input_chars": rc.JudgeMaxInputChars,
 		"gateway_token":       a.GatewayTokenValue(),
 	})
