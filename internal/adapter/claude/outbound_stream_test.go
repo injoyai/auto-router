@@ -141,3 +141,38 @@ func TestParseSSELineNonTextDelta(t *testing.T) {
 	assert.False(t, done)
 	assert.Nil(t, ch, "non-text_delta blocks should return nil chunk")
 }
+
+func TestStreamParserUsage(t *testing.T) {
+	p := NewStreamParser("claude-3")
+
+	// message_start 事件携带 input_tokens
+	p.Parse("event: message_start")
+	ch, done, err := p.Parse(`data: {"type":"message_start","message":{"id":"msg_1","type":"message","role":"assistant","model":"claude-3","content":[],"stop_reason":null,"usage":{"input_tokens":15,"output_tokens":0}}}`)
+	assert.NoError(t, err)
+	assert.False(t, done)
+	assert.Nil(t, ch, "message_start should not emit a content chunk")
+
+	// content_block_delta(普通文本)
+	p.Parse("event: content_block_delta")
+	ch, _, err = p.Parse(`data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Hi"}}`)
+	assert.NoError(t, err)
+	assert.NotNil(t, ch)
+	assert.Nil(t, ch.Usage, "delta should not carry usage")
+
+	// message_delta 携带 output_tokens
+	p.Parse("event: message_delta")
+	ch, done, err = p.Parse(`data: {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":25}}`)
+	assert.NoError(t, err)
+	assert.False(t, done)
+	assert.NotNil(t, ch, "message_delta should emit a chunk")
+	assert.NotNil(t, ch.Usage, "message_delta should carry usage")
+	assert.Equal(t, 15, ch.Usage.PromptTokens, "input_tokens from message_start")
+	assert.Equal(t, 25, ch.Usage.CompletionTokens, "output_tokens from message_delta")
+	assert.Equal(t, 40, ch.Usage.TotalTokens, "total = input + output")
+
+	// message_stop
+	p.Parse("event: message_stop")
+	_, done, err = p.Parse(`data: {"type":"message_stop"}`)
+	assert.NoError(t, err)
+	assert.True(t, done)
+}

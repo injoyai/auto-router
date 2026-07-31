@@ -146,11 +146,22 @@ func (d *Dispatcher) callStreamOnce(baseURL, apiKey, protocol string, body map[s
 	}
 	scanner := bufio.NewScanner(resp.Body)
 	scanner.Buffer(make([]byte, 1024), 4*1024*1024)
+	var claudeParser *claude.StreamParser
+	if protocol == "claude" {
+		claudeParser = claude.NewStreamParser("")
+	}
 	for scanner.Scan() {
 		line := strings.TrimRight(scanner.Text(), "\r")
-		ch, done, err := parseUpstreamSSELine(line, protocol)
-		if err != nil {
-			return err
+		var ch *model.Chunk
+		var done bool
+		var perr error
+		if claudeParser != nil {
+			ch, done, perr = claudeParser.Parse(line)
+		} else {
+			ch, done, perr = parseUpstreamSSELine(line, protocol)
+		}
+		if perr != nil {
+			return perr
 		}
 		if done {
 			if onChunk != nil {

@@ -75,7 +75,8 @@ func TestGatewayRequestedVsRoutedModel(t *testing.T) {
 	r.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
-	logs, _, _ := app.Store.ListLogs(1, 10, "", "")
+	// Two logs: the judge_call entry and the user request entry (reason=judge).
+	logs, _, _ := app.Store.ListLogs(1, 10, "judge", "")
 	if assert.Len(t, logs, 1) {
 		assert.Equal(t, "auto", logs[0].RequestedModel)
 		assert.Equal(t, "gpt-4o", logs[0].RoutedModel)

@@ -28,8 +28,29 @@ func BuildUpstreamRequest(req *model.ChatRequest) (map[string]any, error) {
 		}
 	}
 	body["model"] = req.Model
-	body["messages"] = req.Messages
+	// Same-protocol (openai→openai): passthrough the original messages so
+	// multimodal content (image_url blocks etc.) is preserved. The canonical
+	// string form would drop non-text blocks. Cross-protocol clients (Claude)
+	// use the rebuilt canonical messages to avoid leaking Claude-specific shapes.
+	if req.ClientFmt == "openai" {
+		if rawMsgs, ok := req.Raw["messages"]; ok {
+			body["messages"] = rawMsgs
+		} else {
+			body["messages"] = req.Messages
+		}
+	} else {
+		body["messages"] = req.Messages
+	}
 	body["stream"] = req.Stream
+	// For streaming requests, ensure the upstream returns usage in the final
+	// chunk. Most OpenAI-compatible APIs (including DeepSeek) omit usage
+	// unless stream_options.include_usage is true. If the client already set
+	// stream_options we respect it; otherwise we inject it.
+	if req.Stream {
+		if _, ok := body["stream_options"]; !ok {
+			body["stream_options"] = map[string]any{"include_usage": true}
+		}
+	}
 	if len(req.Tools) > 0 {
 		body["tools"] = req.Tools
 	}

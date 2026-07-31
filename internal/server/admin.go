@@ -145,7 +145,29 @@ func (a *App) handleTestProvider(c *gin.Context) {
 		return
 	}
 	apiKey, _ := store.Decrypt(a.CryptoKey, p.APIKey)
+	start := time.Now()
 	status, respBody, err := a.Dispatcher.TestConnect(p.BaseURL, apiKey, p.Protocol)
+	latency := time.Since(start).Milliseconds()
+
+	// Persist a test log row so provider connectivity checks show up in the
+	// logs page alongside normal request logs (route_reason="test").
+	errMsg := ""
+	if err != nil {
+		errMsg = err.Error()
+	} else if status < 200 || status >= 300 {
+		errMsg = fmt.Sprintf("HTTP %d: %s", status, respBody)
+	}
+	_ = a.Store.CreateLog(&store.RequestLog{
+		SessionID:      fmt.Sprintf("test-prov-%d", p.ID),
+		ClientProtocol: p.Protocol,
+		RequestedModel: "",
+		RoutedModel:    p.Name,
+		RouteReason:    "test",
+		Status:         status,
+		LatencyMs:      latency,
+		Error:          errMsg,
+	})
+
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{"ok": false, "status": status, "error": err.Error()})
 		return
@@ -153,10 +175,10 @@ func (a *App) handleTestProvider(c *gin.Context) {
 	// I6: ok is true only for 2xx responses; any other status is reported with
 	// a generic "HTTP <status>" error plus the upstream body for diagnostics.
 	if status >= 200 && status < 300 {
-		c.JSON(http.StatusOK, gin.H{"ok": true, "status": status})
+		c.JSON(http.StatusOK, gin.H{"ok": true, "status": status, "latency_ms": latency})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"ok": false, "status": status, "error": fmt.Sprintf("HTTP %d: %s", status, respBody)})
+	c.JSON(http.StatusOK, gin.H{"ok": false, "status": status, "latency_ms": latency, "error": fmt.Sprintf("HTTP %d: %s", status, respBody)})
 }
 
 func (a *App) handleTestModel(c *gin.Context) {
@@ -191,13 +213,31 @@ func (a *App) handleTestModel(c *gin.Context) {
 	}
 
 	ok := status >= 200 && status < 300
+	errMsg := ""
+	if err != nil {
+		errMsg = err.Error()
+	} else if !ok {
+		errMsg = fmt.Sprintf("HTTP %d: %s", status, respBody)
+	}
+	// Persist a test log row so model connectivity checks show up in the
+	// logs page alongside normal request logs (route_reason="test").
+	_ = a.Store.CreateLog(&store.RequestLog{
+		SessionID:      fmt.Sprintf("test-model-%d", m.ID),
+		ClientProtocol: prov.Protocol,
+		RequestedModel: m.Name,
+		RoutedModel:    m.Name,
+		RouteReason:    "test",
+		Status:         status,
+		LatencyMs:      latency,
+		Error:          errMsg,
+	})
 	resp := gin.H{
 		"ok":         ok,
 		"status":     status,
 		"latency_ms": latency,
 	}
 	if !ok {
-		resp["error"] = fmt.Sprintf("HTTP %d: %s", status, respBody)
+		resp["error"] = errMsg
 	}
 	c.JSON(http.StatusOK, resp)
 }
@@ -356,5 +396,34 @@ func (a *App) handleStats(c *gin.Context) {
 	}
 	var reasons []reasonCount
 	a.Store.DB.Model(&store.RequestLog{}).Select("route_reason as reason, count(*) as count").Group("route_reason").Scan(&reasons)
-	c.JSON(http.StatusOK, gin.H{"total": total, "by_reason": reasons})
+
+	totalTokens, _ := a.Store.TokenStatsTotal()
+	byModel, _ := a.Store.TokenStatsByModel()
+	byProvider, _ := a.Store.TokenStatsByProvider()
+
+	c.JSON(http.StatusOK, gin.H{
+		"total":       total,
+		"by_reason":   reasons,
+		"tokens":      gin.H{"total": totalTokens, "prompt": tokenSumPrompt(byModel), "completion": tokenSumCompletion(byModel)},
+		"by_model":    byModel,
+		"by_provider": byProvider,
+	})
+}
+
+// tokenSumPrompt sums PromptTokens across rows.
+func tokenSumPrompt(rows []store.TokenStatRow) int64 {
+	var s int64
+	for _, r := range rows {
+		s += r.PromptTokens
+	}
+	return s
+}
+
+// tokenSumCompletion sums CompletionTokens across rows.
+func tokenSumCompletion(rows []store.TokenStatRow) int64 {
+	var s int64
+	for _, r := range rows {
+		s += r.CompletionTokens
+	}
+	return s
 }

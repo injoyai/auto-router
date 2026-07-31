@@ -47,7 +47,7 @@ export default function Routing() {
 
   const enabledModels = (models ?? []).filter((m) => m.enabled)
   const modelOptions = enabledModels.map((m) => ({ value: m.id, label: `${m.display_name} (${m.name})` }))
-  const baseUrl = window.location.origin
+  const baseUrl = window.location.origin + '/v1'
 
   const copyText = (text: string, label: string) => {
     navigator.clipboard.writeText(text)
@@ -78,7 +78,7 @@ export default function Routing() {
           />
         </Space.Compact>
         <Text type="secondary" style={{ fontSize: 12, display: 'block', marginTop: 8 }}>
-          客户端请将请求发送到此地址的 <Text code>/v1/chat/completions</Text> 或 <Text code>/v1/messages</Text> 端点
+          复制此地址填入第三方工具的 Base URL,工具会自动拼接 <Text code>/chat/completions</Text>(OpenAI)或 <Text code>/messages</Text>(Claude)端点
         </Text>
 
         <div style={{ height: 1, background: 'var(--sand-100)', margin: '20px 0' }} />
@@ -136,7 +136,7 @@ export default function Routing() {
             label={
               <Space size={4}>
                 <span>判定模型</span>
-                <Tooltip title="请选择非推理模型（如 gpt-4o-mini），推理模型会消耗大量 token 用于思考，起不到节约成本的效果">
+                <Tooltip title="请选择非推理模型（如 deepseek-v4-flah），推理模型会消耗大量 token 用于思考，起不到节约成本的效果">
                   <InfoCircleOutlined style={{ color: 'var(--amber)', fontSize: 13 }} />
                 </Tooltip>
               </Space>

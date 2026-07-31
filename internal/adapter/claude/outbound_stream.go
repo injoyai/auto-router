@@ -236,3 +236,106 @@ func writeSSEEvent(buf *strings.Builder, eventType string, data map[string]any) 
 	buf.Write(b)
 	buf.WriteString("\n\n")
 }
+
+// StreamParser is a stateful SSE parser for Claude streams. It tracks the
+// current event type and input_tokens (from message_start) so that the
+// final message_delta chunk can emit a complete Usage.
+type StreamParser struct {
+	model        string
+	currentEvent string
+	inputTokens  int
+}
+
+// NewStreamParser creates a StreamParser for the given model name.
+func NewStreamParser(model string) *StreamParser {
+	return &StreamParser{model: model}
+}
+
+// Parse processes one SSE line and returns (chunk, done, error).
+func (p *StreamParser) Parse(line string) (*model.Chunk, bool, error) {
+	if line == "" || strings.HasPrefix(line, ":") {
+		return nil, false, nil
+	}
+	if strings.HasPrefix(line, "event:") {
+		p.currentEvent = strings.TrimSpace(strings.TrimPrefix(line, "event:"))
+		return nil, false, nil
+	}
+	if !strings.HasPrefix(line, "data:") {
+		return nil, false, nil
+	}
+	data := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
+
+	var evt struct {
+		Type string `json:"type"`
+	}
+	if err := json.Unmarshal([]byte(data), &evt); err != nil {
+		return nil, false, err
+	}
+
+	switch evt.Type {
+	case "message_start":
+		var ms struct {
+			Message struct {
+				Usage struct {
+					InputTokens  int `json:"input_tokens"`
+					OutputTokens int `json:"output_tokens"`
+				} `json:"usage"`
+			} `json:"message"`
+		}
+		if err := json.Unmarshal([]byte(data), &ms); err != nil {
+			return nil, false, err
+		}
+		p.inputTokens = ms.Message.Usage.InputTokens
+		return nil, false, nil
+
+	case "content_block_delta":
+		var cd struct {
+			Delta struct {
+				Type string `json:"type"`
+				Text string `json:"text"`
+			} `json:"delta"`
+		}
+		if err := json.Unmarshal([]byte(data), &cd); err != nil {
+			return nil, false, err
+		}
+		return &model.Chunk{
+			Model:   p.model,
+			Choices: []model.ChunkChoice{{Index: 0, Delta: model.Delta{Content: cd.Delta.Text}}},
+		}, false, nil
+
+	case "message_delta":
+		var md struct {
+			Delta struct {
+				StopReason string `json:"stop_reason"`
+			} `json:"delta"`
+			Usage struct {
+				OutputTokens int `json:"output_tokens"`
+			} `json:"usage"`
+		}
+		if err := json.Unmarshal([]byte(data), &md); err != nil {
+			return nil, false, err
+		}
+		finishReason := stopReasonMap[md.Delta.StopReason]
+		if finishReason == "" {
+			finishReason = "stop"
+		}
+		return &model.Chunk{
+			Model: p.model,
+			Choices: []model.ChunkChoice{{
+				Index:        0,
+				Delta:        model.Delta{},
+				FinishReason: finishReason,
+			}},
+			Usage: &model.Usage{
+				PromptTokens:     p.inputTokens,
+				CompletionTokens: md.Usage.OutputTokens,
+				TotalTokens:      p.inputTokens + md.Usage.OutputTokens,
+			},
+		}, false, nil
+
+	case "message_stop":
+		return nil, true, nil
+	}
+
+	return nil, false, nil
+}

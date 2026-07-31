@@ -21,7 +21,7 @@ func TestJudgeClientCallsUpstream(t *testing.T) {
 
 	jc := NewJudgeClient(upstream.New(), srv.URL, "sk-judge", "openai")
 	judgeModel := &store.Model{Name: "judge-mini"}
-	out, err := jc.Judge(judgeModel, []store.Model{{Name: "gpt-4o"}}, "hi")
+	out, _, err := jc.Judge(judgeModel, []store.Model{{Name: "gpt-4o"}}, "hi")
 	assert.NoError(t, err)
 	assert.Equal(t, "gpt-4o", out)
 }

@@ -1,10 +1,11 @@
 import { Card, Col, Row, Statistic, Spin } from 'antd'
-import { Pie, Column } from '@ant-design/charts'
+import { Pie } from '@ant-design/charts'
 import {
   ThunderboltOutlined,
   CheckCircleOutlined,
   AppstoreOutlined,
   ClockCircleOutlined,
+  FireOutlined,
 } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
 import { getStats, listLogs } from '../api/logs'
@@ -51,21 +52,28 @@ export default function Dashboard() {
 
   const activeModelCount = models?.filter((m) => m.enabled).length ?? 0
 
+  const reasonLabels: Record<string, string> = {
+    override: '指定路由',
+    judge: '智能路由',
+    judge_call: '判定调用',
+    fallback: '兜底路由',
+    test: '测试',
+  }
   const pieData = (stats?.by_reason ?? []).map((r) => ({
-    type: r.Reason,
+    type: reasonLabels[r.Reason] ?? r.Reason,
     value: r.Count,
   }))
 
-  const modelMap: Record<string, number> = {}
-  logs.forEach((l) => {
-    if (l.routed_model) {
-      modelMap[l.routed_model] = (modelMap[l.routed_model] ?? 0) + 1
-    }
-  })
-  const columnData = Object.entries(modelMap)
-    .map(([model, count]) => ({ model, count }))
-    .sort((a, b) => b.count - a.count)
-    .slice(0, 10)
+  const tokensTotal = stats?.tokens?.total ?? 0
+  const tokensPrompt = stats?.tokens?.prompt ?? 0
+  const tokensCompletion = stats?.tokens?.completion ?? 0
+
+  const formatTokens = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : `${n}`)
+
+  const tokenPieData = (stats?.by_model ?? []).map((r) => ({
+    type: r.model,
+    value: r.total_tokens,
+  }))
 
   const pieConfig = {
     data: pieData,
@@ -75,16 +83,6 @@ export default function Dashboard() {
     label: { type: 'outer' as const },
     legend: { position: 'bottom' as const },
     color: ['#3a6b4d', '#c87a4a', '#d4a04c', '#5a9d6e', '#a89e85'],
-  }
-
-  const columnConfig = {
-    data: columnData,
-    xField: 'model',
-    yField: 'count',
-    label: { position: 'top' as const },
-    xAxis: { label: { autoRotate: true, autoHide: false } },
-    color: '#3a6b4d',
-    columnStyle: { radius: [6, 6, 0, 0] },
   }
 
   return (
@@ -117,6 +115,26 @@ export default function Dashboard() {
           </Card>
         </Col>
       </Row>
+      <Row gutter={[20, 20]} style={{ marginBottom: 20 }}>
+        <Col span={8} className="aurora-fade-in aurora-fade-in-1">
+          <Card className="stat-card stat-card--indigo">
+            <div className="stat-card-icon"><FireOutlined /></div>
+            <Statistic title="Token 消耗" value={formatTokens(tokensTotal)} />
+          </Card>
+        </Col>
+        <Col span={8} className="aurora-fade-in aurora-fade-in-2">
+          <Card className="stat-card stat-card--mint">
+            <div className="stat-card-icon"><ThunderboltOutlined /></div>
+            <Statistic title="Prompt" value={formatTokens(tokensPrompt)} />
+          </Card>
+        </Col>
+        <Col span={8} className="aurora-fade-in aurora-fade-in-3">
+          <Card className="stat-card stat-card--violet">
+            <div className="stat-card-icon"><CheckCircleOutlined /></div>
+            <Statistic title="Completion" value={formatTokens(tokensCompletion)} />
+          </Card>
+        </Col>
+      </Row>
       <Row gutter={20}>
         <Col span={12} className="aurora-fade-in aurora-fade-in-3">
           <Card title="路由原因分布" className="aurora-card">
@@ -128,9 +146,9 @@ export default function Dashboard() {
           </Card>
         </Col>
         <Col span={12} className="aurora-fade-in aurora-fade-in-4">
-          <Card title="模型使用占比" className="aurora-card">
-            {columnData.length > 0 ? (
-              <Column {...columnConfig} />
+          <Card title="Token 按模型分布" className="aurora-card">
+            {tokenPieData.length > 0 ? (
+              <Pie {...pieConfig} data={tokenPieData} angleField="value" colorField="type" />
             ) : (
               <p style={{ color: '#a89e85', textAlign: 'center', padding: 40 }}>暂无数据</p>
             )}

@@ -21,7 +21,7 @@ export default function Login() {
       localStorage.setItem('admin_jwt', res.token)
       navigate('/')
     } catch {
-      setError('登录失败，请检查 Token')
+      setError('登录失败，请检查密码')
     } finally {
       setLoading(false)
     }
@@ -54,7 +54,7 @@ export default function Login() {
         </div>
         {error && <Alert type="error" message={error} style={{ marginBottom: 16, borderRadius: 8 }} showIcon />}
         <Input.Password
-          placeholder="Admin Token"
+          placeholder="管理后台密码"
           value={token}
           onChange={(e) => setToken(e.target.value)}
           onPressEnter={handleSubmit}
