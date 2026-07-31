@@ -54,10 +54,15 @@ export default function Queues() {
   }
 
   const openMembers = async (g: ModelGroup) => {
-    setMemberGroupId(g.id)
-    const items = await listGroupItems(g.id)
-    setPicked(items.map((i) => i.model_id))
-    setMemberOpen(true)
+    try {
+      const items = await listGroupItems(g.id)
+      const enabledIds = new Set((models ?? []).filter((m) => m.enabled).map((m) => m.id))
+      setPicked(items.map((i) => i.model_id).filter((id) => enabledIds.has(id)))
+      setMemberGroupId(g.id)
+      setMemberOpen(true)
+    } catch {
+      message.error('加载成员失败')
+    }
   }
   const saveMembers = async () => {
     if (memberGroupId === null) return
