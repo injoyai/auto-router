@@ -54,7 +54,7 @@ export default function Layout() {
           </span>
           Auto Router
         </div>
-        <div className="aurora-brand-sub">AI Gateway</div>
+        <div className="aurora-brand-sub">AI Gateway · v2026.07.31</div>
         <Menu
           mode="inline"
           theme="light"
