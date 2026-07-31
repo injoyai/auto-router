@@ -96,3 +96,22 @@ func TestRouteFallbackOnBadJudge(t *testing.T) {
 	assert.Equal(t, "deepseek-v4-flash", dec.ModelName)
 	assert.Equal(t, "fallback", dec.Reason)
 }
+
+func TestRouteOverrideMultiModelChainOrder(t *testing.T) {
+	m1 := store.Model{ID: 1, Name: "m1", Enabled: true}
+	m2 := store.Model{ID: 2, Name: "m2", Enabled: true}
+	g := store.ModelGroup{ID: 8, Name: "multi-q", Enabled: true}
+	fs := &fakeStore{
+		groups: []store.ModelGroup{g},
+		byName: map[string]*store.ModelGroup{"multi-q": &g},
+		chains: map[uint][]store.Model{8: {m1, m2}},
+	}
+	e := New(fs, &fakeJudge{})
+	dec, err := e.Route(&model.ChatRequest{Override: "multi-q"})
+	assert.NoError(t, err)
+	assert.Equal(t, "multi-q", dec.ModelName)
+	assert.Len(t, dec.Models, 2)
+	assert.Equal(t, "m1", dec.Models[0].Name)
+	assert.Equal(t, "m2", dec.Models[1].Name)
+	assert.Equal(t, "m1", dec.Model.Name) // chain head
+}

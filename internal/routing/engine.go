@@ -51,6 +51,16 @@ func New(s StoreDeps, j JudgeClient) *Engine {
 	return &Engine{Store: s, Judge: j}
 }
 
+// toPtrChain converts a slice of Model values to a slice of pointers,
+// preserving order. Each pointer addresses a distinct element.
+func toPtrChain(chain []store.Model) []*store.Model {
+	out := make([]*store.Model, len(chain))
+	for i := range chain {
+		out[i] = &chain[i]
+	}
+	return out
+}
+
 // resolveGroupChain resolves a queue name to an ordered model chain.
 // Only looks up ModelGroup, never Model.
 func (e *Engine) resolveGroupChain(name string) ([]*store.Model, error) {
@@ -65,11 +75,7 @@ func (e *Engine) resolveGroupChain(name string) ([]*store.Model, error) {
 	if len(chain) == 0 {
 		return nil, fmt.Errorf("queue %q has no available models", name)
 	}
-	out := make([]*store.Model, len(chain))
-	for i := range chain {
-		out[i] = &chain[i]
-	}
-	return out, nil
+	return toPtrChain(chain), nil
 }
 
 // Route decides which queue to use for the request.
@@ -133,10 +139,7 @@ func (e *Engine) Route(req *model.ChatRequest) (*Decision, error) {
 	if rc.DefaultGroupID != nil {
 		if g, err := e.Store.GetModelGroup(*rc.DefaultGroupID); err == nil && g != nil && g.Enabled {
 			if chain, err := e.Store.GetGroupChain(g.ID); err == nil && len(chain) > 0 {
-				out := make([]*store.Model, len(chain))
-				for i := range chain {
-					out[i] = &chain[i]
-				}
+				out := toPtrChain(chain)
 				return &Decision{ModelName: g.Name, Model: out[0], Models: out, Reason: "fallback", JudgeRaw: judgeRaw, JudgeModel: judgeName, JudgeUsage: judgeUsage, JudgeLatency: judgeLatency}, nil
 			}
 		}
