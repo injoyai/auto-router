@@ -3,7 +3,6 @@ import { Card, Form, Select, InputNumber, Button, message, Spin, Input, Space, T
 import { InfoCircleOutlined, CopyOutlined } from '@ant-design/icons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getRoutingConfig, updateRoutingConfig } from '../api/routing'
-import { listModels } from '../api/models'
 import { listGroups } from '../api/groups'
 
 const { Text } = Typography
@@ -16,11 +15,6 @@ export default function Routing() {
   const { data: cfg, isLoading } = useQuery({
     queryKey: ['routingConfig'],
     queryFn: getRoutingConfig,
-  })
-
-  const { data: models } = useQuery({
-    queryKey: ['models'],
-    queryFn: listModels,
   })
 
   const { data: groups } = useQuery({
@@ -51,8 +45,6 @@ export default function Routing() {
 
   if (isLoading) return <Spin size="large" style={{ display: 'block', marginTop: 48 }} />
 
-  const enabledModels = (models ?? []).filter((m) => m.enabled)
-  const modelOptions = enabledModels.map((m) => ({ value: m.id, label: m.name }))
   const enabledGroups = (groups ?? []).filter((g) => g.enabled)
   const groupOptions = enabledGroups.map((g) => ({ value: g.id, label: g.name }))
   const baseUrl = window.location.origin + '/v1'
@@ -68,7 +60,7 @@ export default function Routing() {
   return (
     <div>
       <div className="page-title">路由配置</div>
-      <div className="page-subtitle">配置智能路由的判定模型、兜底策略与 API Key</div>
+      <div className="page-subtitle">配置智能路由的判定队列、兜底策略与 API Key</div>
 
       {/* 请求地址 & 可用模型 */}
       <Card className="aurora-card" style={{ maxWidth: 600, marginBottom: 20 }}>
@@ -140,18 +132,18 @@ export default function Routing() {
       <Card title="路由配置" className="aurora-card" style={{ maxWidth: 600 }}>
         <Form form={form} layout="vertical" style={{ maxWidth: 500 }}>
           <Form.Item
-            name="judge_model_id"
+            name="judge_group_id"
             label={
               <Space size={4}>
-                <span>判定模型</span>
-                <Tooltip title="请选择非推理模型（如 deepseek-v4-flah），推理模型会消耗大量 token 用于思考，起不到节约成本的效果">
+                <span>判定队列</span>
+                <Tooltip title="判定队列，按队列内模型顺序失败转移；建议选非推理模型组成的队列，推理模型会消耗大量 token 用于思考">
                   <InfoCircleOutlined style={{ color: 'var(--amber)', fontSize: 13 }} />
                 </Tooltip>
               </Space>
             }
-            extra={<Text type="secondary" style={{ fontSize: 12 }}>需要非推理模型，否则起不到节约 token 的效果</Text>}
+            extra={<Text type="secondary" style={{ fontSize: 12 }}>判定按队列内模型顺序失败转移，全部失败再回退兜底队列</Text>}
           >
-            <Select allowClear placeholder="选择判定模型" options={modelOptions} />
+            <Select allowClear placeholder="选择判定队列" options={groupOptions} />
           </Form.Item>
           <Form.Item
             name="default_group_id"

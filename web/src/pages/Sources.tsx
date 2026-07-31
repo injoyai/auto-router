@@ -17,7 +17,6 @@ import {
   deleteModel,
   testModel,
 } from '../api/models'
-import { getRoutingConfig } from '../api/routing'
 
 const protocolColors: Record<string, string> = { openai: 'blue', claude: 'purple' }
 
@@ -35,13 +34,6 @@ export default function Sources() {
     queryFn: listModels,
     enabled: selectedProviderId !== null,
   })
-
-  // 判定模型统一从 routingConfig 派生（单一数据源，避免与路由配置页冲突）
-  const { data: routingConfig } = useQuery({
-    queryKey: ['routingConfig'],
-    queryFn: getRoutingConfig,
-  })
-  const judgeModelId = routingConfig?.judge_model_id ?? null
 
   // Provider mutations
   const createProvMut = useMutation({
@@ -193,10 +185,6 @@ export default function Sources() {
     { title: '名称', dataIndex: 'name', key: 'name' },
     { title: '描述', dataIndex: 'description', key: 'description', ellipsis: true },
     {
-      title: '判定', key: 'is_judge',
-      render: (_: unknown, r: ModelType) => judgeModelId === r.id ? <Tag color="blue">判定模型</Tag> : null,
-    },
-    {
       title: '启用', dataIndex: 'enabled', key: 'enabled',
       render: (_: boolean, r: ModelType) => (
         <Switch checked={r.enabled} onChange={(v) => updateModelMut.mutate({ id: r.id, data: { ...r, enabled: v } })} />
@@ -269,10 +257,8 @@ export default function Sources() {
             dataSource={filteredModels}
             rowKey="id"
             loading={modelsLoading}
-            rowClassName={(r) => judgeModelId === r.id ? 'ant-table-row-selected' : ''}
-            onRow={(r) => ({
-              style: judgeModelId === r.id ? { backgroundColor: '#eef2ff' } : undefined,
-            })}
+            rowClassName={() => ''}
+            onRow={() => ({})}
             locale={{ emptyText: selectedProviderId ? '暂无模型' : '请先选择左侧的 API 源' }}
           />
         </div>

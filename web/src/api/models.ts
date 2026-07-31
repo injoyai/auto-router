@@ -6,7 +6,6 @@ export interface Model {
   provider_id: number
   description: string
   enabled: boolean
-  is_judge: boolean
 }
 
 export async function listModels(): Promise<Model[]> {
@@ -26,10 +25,6 @@ export async function updateModel(id: number, m: Partial<Model>): Promise<Model>
 
 export async function deleteModel(id: number): Promise<void> {
   await apiClient.delete(`/admin/models/${id}`)
-}
-
-export async function setJudgeModel(id: number): Promise<void> {
-  await apiClient.post(`/admin/models/${id}/judge`)
 }
 
 export interface ModelTestUsage {
