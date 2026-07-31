@@ -6,7 +6,7 @@
 
 ## 技术栈
 
-- **后端**: Go 1.25 + Gin + GORM + SQLite (glebarez/sqlite, 纯 Go 驱动)
+- **后端**: Go 1.25 + Gin + GORM + 多数据库支持 (SQLite 默认 via glebarez/sqlite 纯 Go 驱动; MySQL via gorm.io/driver/mysql)
 - **前端**: React 18 + TypeScript + Ant Design 5 + Vite + TanStack Query
 - **设计系统**: "Frosted Botanical" - 毛玻璃植物风，定义在 `web/src/global.css`
 
@@ -21,6 +21,7 @@ internal/
   adapter/openai/            # OpenAI 协议适配(入站解析 + 出站请求/响应/流)
   adapter/claude/            # Claude 协议适配
   store/                     # GORM 数据层 (Provider, Model, ModelGroup, RequestLog, RoutingConfig, Setting)
+                             # dialer.go: Dialer 接口; sqlite_dialer.go / mysql_dialer.go: 驱动实现
   routing/                   # 路由引擎 + 判定模型调用
   upstream/                  # 上游 HTTP 分发(含代理支持)
   server/                    # Gin 路由 + admin API + gateway 处理
@@ -67,6 +68,7 @@ web/
 2. **API Key 加密**: 后端 AES 加密存储，编辑时通过 `APIKeyPlain` 返回明文，前端 `Input.Password` 掩码显示
 3. **服务商代理**: 每个 Provider 独立配置 `ProxyURL`，Dispatcher 按 proxy URL 缓存 HTTP Client
 4. **队列成员拖拽排序**: 前端原生 HTML5 拖拽 API，松手后调用 `ReplaceGroupItems` 保存
+5. **多数据库支持**: 通过 `Dialer` 接口抽象驱动差异（`internal/store/dialer.go`）。默认 SQLite，通过 `DB_DRIVER=mysql` 切换 MySQL（DSN 由 `DB_DSN` 提供）。`store.Open(dialer, dsn)` 仅保留通用逻辑（AutoMigrate + seed），驱动特定初始化（SQLite PRAGMA、MySQL 连接池）在各 Dialer 实现内。现有 SQL 均为 ANSI 标准，store 层查询代码零改动
 
 ## 踩坑记录
 

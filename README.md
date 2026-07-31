@@ -26,7 +26,9 @@ go build -o auto-router ./cmd
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
 | `LISTEN_ADDR` | `:8080` | 监听地址 |
-| `DB_PATH` | `./data/database/auto-router.db` | SQLite 路径 |
+| `DB_DRIVER` | `sqlite` | 数据库驱动：`sqlite` 或 `mysql` |
+| `DB_PATH` | `./data/database/auto-router.db` | SQLite 文件路径（仅 `sqlite` 驱动使用） |
+| `DB_DSN` | (空) | MySQL 连接串（仅 `mysql` 驱动使用，需含 `parseTime=true`） |
 | `GATEWAY_TOKEN` | 自动生成 | 客户端访问网关的 token(可覆盖) |
 | `PASSWORD` | 自动生成 | 管理后台登录密码(可覆盖) |
 | `CONFIG_FILE` | `./config/config.yaml` | 配置文件路径(不存在则忽略) |
@@ -38,7 +40,10 @@ go build -o auto-router ./cmd
 
 ```yaml
 listen_addr: ":8080"
-db_path: "./data/database/auto-router.db"
+db_driver: "sqlite"                 # sqlite (默认) 或 mysql
+db_path: "./data/database/auto-router.db"  # 仅 sqlite 驱动使用
+db_dsn: ""                          # 仅 mysql 驱动使用，例如：
+# db_dsn: "root:password@tcp(127.0.0.1:3306)/auto_router?charset=utf8mb4&parseTime=true&loc=Local"
 password: "your-admin-password"   # 管理后台登录密码
 gateway_token: "your-gateway-token"
 dev: false
