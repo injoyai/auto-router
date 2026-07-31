@@ -7,25 +7,48 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// Config 顶层配置，按职责分为 Server / DB / Auth 三组。
 type Config struct {
-	ListenAddr   string
-	DBDriver     string // sqlite (默认) | mysql
-	DBPath       string // SQLite 文件路径（仅 sqlite 驱动使用）
-	DBDSN        string // MySQL 连接串（仅 mysql 驱动使用）
-	Password     string // admin login password; if empty, generated on first run and stored in DB
-	GatewayToken string // if empty, generated on first run and stored in DB
-	DevMode      bool
+	Server ServerConfig
+	DB     DBConfig
+	Auth   AuthConfig
 }
 
-// fileConfig mirrors Config fields for the optional YAML config file.
+// ServerConfig 服务运行相关配置。
+type ServerConfig struct {
+	ListenAddr string
+	DevMode    bool
+}
+
+// DBConfig 数据库相关配置。
+type DBConfig struct {
+	Driver string // sqlite (默认) | mysql
+	Path   string // SQLite 文件路径（仅 sqlite 驱动使用）
+	DSN    string // MySQL 连接串（仅 mysql 驱动使用，需含 parseTime=true）
+}
+
+// AuthConfig 认证相关配置。
+type AuthConfig struct {
+	Password     string // admin login password; if empty, generated on first run and stored in DB
+	GatewayToken string // if empty, generated on first run and stored in DB
+}
+
+// fileConfig mirrors Config structure for the optional YAML config file.
+// 字段名与 yaml 键均为分组嵌套，不兼容旧版扁平格式。
 type fileConfig struct {
-	ListenAddr   string `yaml:"listen_addr"`
-	DBDriver     string `yaml:"db_driver"`
-	DBPath       string `yaml:"db_path"`
-	DBDSN        string `yaml:"db_dsn"`
-	Password     string `yaml:"password"`
-	GatewayToken string `yaml:"gateway_token"`
-	DevMode      bool   `yaml:"dev"`
+	Server struct {
+		ListenAddr string `yaml:"listen_addr"`
+		DevMode    bool   `yaml:"dev"`
+	} `yaml:"server"`
+	DB struct {
+		Driver string `yaml:"driver"`
+		Path   string `yaml:"path"`
+		DSN    string `yaml:"dsn"`
+	} `yaml:"db"`
+	Auth struct {
+		Password     string `yaml:"password"`
+		GatewayToken string `yaml:"gateway_token"`
+	} `yaml:"auth"`
 }
 
 // Load builds Config with precedence: env var > config file > default.
@@ -38,13 +61,19 @@ func Load() (Config, error) {
 		return Config{}, err
 	}
 	return Config{
-		ListenAddr:   firstNonEmpty(os.Getenv("LISTEN_ADDR"), fc.ListenAddr, ":8080"),
-		DBDriver:     firstNonEmpty(os.Getenv("DB_DRIVER"), fc.DBDriver, "sqlite"),
-		DBPath:       firstNonEmpty(os.Getenv("DB_PATH"), fc.DBPath, "./data/database/auto-router.db"),
-		DBDSN:        firstNonEmpty(os.Getenv("DB_DSN"), fc.DBDSN),
-		Password:     firstNonEmpty(os.Getenv("PASSWORD"), fc.Password),
-		GatewayToken: firstNonEmpty(os.Getenv("GATEWAY_TOKEN"), fc.GatewayToken),
-		DevMode:      os.Getenv("DEV") != "" || fc.DevMode,
+		Server: ServerConfig{
+			ListenAddr: firstNonEmpty(os.Getenv("SERVER_LISTEN_ADDR"), fc.Server.ListenAddr, ":8080"),
+			DevMode:    os.Getenv("SERVER_DEV") != "" || fc.Server.DevMode,
+		},
+		DB: DBConfig{
+			Driver: firstNonEmpty(os.Getenv("DB_DRIVER"), fc.DB.Driver, "sqlite"),
+			Path:   firstNonEmpty(os.Getenv("DB_PATH"), fc.DB.Path, "./data/database/auto-router.db"),
+			DSN:    firstNonEmpty(os.Getenv("DB_DSN"), fc.DB.DSN),
+		},
+		Auth: AuthConfig{
+			Password:     firstNonEmpty(os.Getenv("AUTH_PASSWORD"), fc.Auth.Password),
+			GatewayToken: firstNonEmpty(os.Getenv("AUTH_GATEWAY_TOKEN"), fc.Auth.GatewayToken),
+		},
 	}, nil
 }
 

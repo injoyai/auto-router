@@ -16,10 +16,10 @@ func main() {
 		log.Fatal(err)
 	}
 	var dialer store.Dialer
-	dsn := cfg.DBPath
-	if cfg.DBDriver == "mysql" {
+	dsn := cfg.DB.Path
+	if cfg.DB.Driver == "mysql" {
 		dialer = store.MySQLDialer{}
-		dsn = cfg.DBDSN
+		dsn = cfg.DB.DSN
 	} else {
 		dialer = store.SQLiteDialer{}
 	}
@@ -31,11 +31,11 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	if cfg.GatewayToken != "" {
-		gwToken = cfg.GatewayToken
+	if cfg.Auth.GatewayToken != "" {
+		gwToken = cfg.Auth.GatewayToken
 	}
-	if cfg.Password != "" {
-		adminToken = cfg.Password
+	if cfg.Auth.Password != "" {
+		adminToken = cfg.Auth.Password
 	}
 	app := server.NewApp(cfg, st, key, gwToken, adminToken)
 
@@ -47,8 +47,8 @@ func main() {
 		log.Printf("SPA static files not available: %v", err)
 	}
 
-	log.Printf("listening on %s | gateway token: %s | admin token: %s", cfg.ListenAddr, gwToken, adminToken)
-	if err := app.Router.Run(cfg.ListenAddr); err != nil {
+	log.Printf("listening on %s | gateway token: %s | admin token: %s", cfg.Server.ListenAddr, gwToken, adminToken)
+	if err := app.Router.Run(cfg.Server.ListenAddr); err != nil {
 		log.Fatal(err)
 	}
 }

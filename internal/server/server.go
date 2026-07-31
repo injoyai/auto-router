@@ -71,7 +71,7 @@ func NewApp(cfg Config, st *store.Store, cryptoKey []byte, gatewayToken, adminTo
 	r.GET("/health", func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"status": "ok"}) })
 
 	// Dev mode: permissive CORS so the Vite dev server can call the backend.
-	if cfg.DevMode {
+	if cfg.Server.DevMode {
 		r.Use(func(c *gin.Context) {
 			c.Header("Access-Control-Allow-Origin", "*")
 			c.Header("Access-Control-Allow-Headers", "Authorization, Content-Type")
