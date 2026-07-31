@@ -29,3 +29,6 @@ web/tsconfig.tsbuildinfo
 
 # Superpowers (AI workflow internals)
 .superpowers/
+
+# Local scripts (not for sharing)
+docker-push.sh
