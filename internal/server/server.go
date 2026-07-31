@@ -127,8 +127,9 @@ func NewApp(cfg Config, st *store.Store, cryptoKey []byte, gatewayToken, adminTo
 	return app
 }
 
-// lazyJudge resolves the judge model's provider + API key at call time so the
-// routing engine does not need to know provider credentials up front.
+// lazyJudge resolves each judge model's provider + API key at call time and
+// invokes them in chain order, returning the first successful response. This
+// keeps provider credentials out of the routing engine.
 type lazyJudge struct {
 	st   *store.Store
 	disp *upstream.Dispatcher
@@ -158,7 +159,7 @@ func (l *lazyJudge) Judge(chain []*store.Model, candidates []routing.Candidate, 
 		}
 	}
 	if lastErr == nil {
-		lastErr = fmt.Errorf("judge queue exhausted")
+		return "", "", nil, fmt.Errorf("judge queue exhausted")
 	}
 	return "", "", nil, fmt.Errorf("judge queue exhausted: %w", lastErr)
 }

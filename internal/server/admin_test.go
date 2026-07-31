@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"gorm.io/gorm"
 
 	"auto-router/internal/store"
 )
@@ -123,6 +124,14 @@ func TestDeleteReferencedRejected(t *testing.T) {
 	w = httptest.NewRecorder()
 	app.Router.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusOK, w.Code)
+
+	// Strengthen (I10): the Model row is actually gone, and the ModelGroupItem
+	// rows referencing model 1 are cascade-deleted (count is 0).
+	_, err := app.Store.GetModel(1)
+	assert.ErrorIs(t, err, gorm.ErrRecordNotFound)
+	groupCount, err := app.Store.CountGroupsByModel(1)
+	assert.NoError(t, err)
+	assert.EqualValues(t, 0, groupCount)
 
 	// Delete model id=2 (former default model; default check removed, no longer blocks) -> 200
 	req = httptest.NewRequest(http.MethodDelete, "/admin/models/2", nil)

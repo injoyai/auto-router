@@ -10,8 +10,10 @@ import (
 	"auto-router/internal/upstream"
 )
 
-// defaultJudgeClient implements JudgeClient by calling the judge model via the
-// upstream dispatcher.
+// defaultJudgeClient is the low-level single-model judge caller used internally
+// by lazyJudge. It issues one non-streaming request to a judge model via the
+// upstream dispatcher. Unlike routing.JudgeClient (whose Judge iterates a
+// chain), defaultJudgeClient.Judge targets a single model.
 type defaultJudgeClient struct {
 	disp     *upstream.Dispatcher
 	baseURL  string
