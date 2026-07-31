@@ -18,7 +18,7 @@ type testApp struct {
 // target so the gateway can end-to-end route + execute.
 func newTestApp(t *testing.T, upstreamURL string) *testApp {
 	t.Helper()
-	st, err := store.Open(":memory:")
+	st, err := store.Open(store.SQLiteDialer{}, ":memory:")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -63,7 +63,7 @@ func newTestApp(t *testing.T, upstreamURL string) *testApp {
 // provider's protocol (e.g. "claude") and uses a different API key ("sk-claude").
 func newTestAppWithProtocol(t *testing.T, upstreamURL, protocol string) *testApp {
 	t.Helper()
-	st, err := store.Open(":memory:")
+	st, err := store.Open(store.SQLiteDialer{}, ":memory:")
 	if err != nil {
 		t.Fatal(err)
 	}

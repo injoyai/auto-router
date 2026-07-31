@@ -1,43 +1,17 @@
 package store
 
-import (
-	"os"
-	"path/filepath"
-
-	"github.com/glebarez/sqlite"
-	"gorm.io/gorm"
-	"gorm.io/gorm/logger"
-)
+import "gorm.io/gorm"
 
 type Store struct {
 	DB *gorm.DB
 }
 
-func Open(path string) (*Store, error) {
-	// Ensure the parent directory exists for file-backed databases. Skipped
-	// for ":memory:" (no directory) and for relative paths without a dir.
-	if path != ":memory:" {
-		if dir := filepath.Dir(path); dir != "" && dir != "." {
-			if err := os.MkdirAll(dir, 0o755); err != nil {
-				return nil, err
-			}
-		}
-	}
-	db, err := gorm.Open(sqlite.Open(path), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Warn),
-	})
+// Open 使用给定 Dialer 打开数据库并完成通用初始化
+// （AutoMigrate + seed routing_config 单例行）。
+// 驱动特定的初始化（PRAGMA、连接池等）由 Dialer 实现负责。
+func Open(dialer Dialer, dsn string) (*Store, error) {
+	db, err := dialer.Open(dsn)
 	if err != nil {
-		return nil, err
-	}
-	// I8: enable WAL + a 5s busy_timeout so concurrent readers/writers on
-	// file-backed databases don't immediately fail with "database is locked".
-	// These are no-ops on :memory: databases (per-connection, no journal) but
-	// never error, so they are safe to apply unconditionally and before any
-	// migration/write.
-	if err := db.Exec("PRAGMA journal_mode=WAL").Error; err != nil {
-		return nil, err
-	}
-	if err := db.Exec("PRAGMA busy_timeout=5000").Error; err != nil {
 		return nil, err
 	}
 	if err := db.AutoMigrate(&Provider{}, &Model{}, &RoutingConfig{}, &RequestLog{}, &Setting{}, &ModelGroup{}, &ModelGroupItem{}); err != nil {

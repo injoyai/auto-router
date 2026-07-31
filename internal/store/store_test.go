@@ -8,7 +8,7 @@ import (
 
 func newTestStore(t *testing.T) *Store {
 	t.Helper()
-	s, err := Open(":memory:")
+	s, err := Open(SQLiteDialer{}, ":memory:")
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}

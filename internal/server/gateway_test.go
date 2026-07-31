@@ -111,7 +111,7 @@ func TestGatewayQueueFailoverNonStream(t *testing.T) {
 	}))
 	t.Cleanup(okSrv.Close)
 
-	st, err := store.Open(":memory:")
+	st, err := store.Open(store.SQLiteDialer{}, ":memory:")
 	if err != nil {
 		t.Fatal(err)
 	}

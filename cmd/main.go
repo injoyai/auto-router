@@ -15,7 +15,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	st, err := store.Open(cfg.DBPath)
+	st, err := store.Open(store.SQLiteDialer{}, cfg.DBPath)
 	if err != nil {
 		log.Fatal(err)
 	}

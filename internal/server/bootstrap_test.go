@@ -9,7 +9,7 @@ import (
 )
 
 func TestBootstrapGeneratesMissingSecrets(t *testing.T) {
-	st, err := store.Open(":memory:")
+	st, err := store.Open(store.SQLiteDialer{}, ":memory:")
 	assert.NoError(t, err)
 	key, gw, admin, err := Bootstrap(st)
 	assert.NoError(t, err)
