@@ -102,4 +102,8 @@ func TestMigrateLegacyJudgeNoOpWhenNoLegacy(t *testing.T) {
 	assert.NoError(t, migrateLegacyJudge(db))
 	assert.False(t, db.Migrator().HasColumn(&Model{}, "is_judge"))
 	assert.False(t, db.Migrator().HasColumn(&RoutingConfig{}, "judge_model_id"))
+
+	var n int64
+	db.Model(&ModelGroup{}).Count(&n)
+	assert.Equal(t, int64(0), n) // migration must not create any group when there's no legacy config
 }

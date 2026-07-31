@@ -96,14 +96,16 @@ func migrateLegacyJudge(db *gorm.DB) error {
 			}
 			name = fmt.Sprintf("judge-%d", i)
 		}
-		g := ModelGroup{Name: name, Remark: "migrated from legacy judge model", Enabled: true}
-		if err := db.Create(&g).Error; err != nil {
-			return err
-		}
-		if err := db.Create(&ModelGroupItem{GroupID: g.ID, ModelID: *legacyJudgeID, Position: 0}).Error; err != nil {
-			return err
-		}
-		if err := db.Model(&RoutingConfig{}).Where("id = ?", 1).Update("judge_group_id", g.ID).Error; err != nil {
+		if err := db.Transaction(func(tx *gorm.DB) error {
+			g := ModelGroup{Name: name, Remark: "migrated from legacy judge model", Enabled: true}
+			if err := tx.Create(&g).Error; err != nil {
+				return err
+			}
+			if err := tx.Create(&ModelGroupItem{GroupID: g.ID, ModelID: *legacyJudgeID, Position: 0}).Error; err != nil {
+				return err
+			}
+			return tx.Model(&RoutingConfig{}).Where("id = ?", 1).Update("judge_group_id", g.ID).Error
+		}); err != nil {
 			return err
 		}
 	}
