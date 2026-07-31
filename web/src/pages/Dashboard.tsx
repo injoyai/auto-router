@@ -213,7 +213,12 @@ export default function Dashboard() {
     : 0
 
   const tokensTotal = stats?.tokens?.total ?? 0
-  const formatTokens = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : `${n}`)
+  const formatTokens = (n: number) => {
+    if (n < 1000) return `${n}`
+    if (n < 1_000_000) return `${(n / 1000).toFixed(1)}k`
+    if (n < 1_000_000_000) return `${(n / 1_000_000).toFixed(1)}M`
+    return `${(n / 1_000_000_000).toFixed(1)}B`
+  }
 
   const reasonLabels: Record<string, string> = {
     override: '指定路由',

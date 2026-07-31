@@ -4,7 +4,12 @@ import { useQuery } from '@tanstack/react-query'
 import { getStats } from '../api/logs'
 import type { TokenStatRow } from '../api/logs'
 
-const formatTokens = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : `${n}`)
+const formatTokens = (n: number) => {
+  if (n < 1000) return `${n}`
+  if (n < 1_000_000) return `${(n / 1000).toFixed(1)}k`
+  if (n < 1_000_000_000) return `${(n / 1_000_000).toFixed(1)}M`
+  return `${(n / 1_000_000_000).toFixed(1)}B`
+}
 
 export default function Tokens() {
   const { data: stats, isLoading } = useQuery({
