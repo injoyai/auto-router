@@ -135,7 +135,7 @@ func TestDeleteReferencedRejected(t *testing.T) {
 	if err := app.Store.CreateProvider(prov); err != nil {
 		t.Fatal(err)
 	}
-	m := &store.Model{Name: "free", DisplayName: "Free", ProviderID: prov.ID, Enabled: true}
+	m := &store.Model{Name: "free", ProviderID: prov.ID, Enabled: true}
 	if err := app.Store.CreateModel(m); err != nil {
 		t.Fatal(err)
 	}
@@ -174,7 +174,7 @@ func TestAdminGroupsCRUDAndItems(t *testing.T) {
 
 	// Create group "q". The seed group is id=1, so this is typically id=2;
 	// parse the id from the response instead of hard-coding it.
-	w := h("POST", "/admin/groups", groupInput{Name: "q", DisplayName: "Q", Enabled: true})
+	w := h("POST", "/admin/groups", groupInput{Name: "q", Enabled: true})
 	assert.Equal(t, http.StatusOK, w.Code)
 	var g store.ModelGroup
 	assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &g))
@@ -186,12 +186,12 @@ func TestAdminGroupsCRUDAndItems(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 	assert.Contains(t, w.Body.String(), "q")
 
-	// Update group DisplayName and confirm the change via list.
-	w = h("PUT", "/admin/groups/"+strconv.Itoa(int(qID)), groupInput{Name: "q", DisplayName: "Q-updated", Enabled: true})
+	// Update group and confirm the change via list.
+	w = h("PUT", "/admin/groups/"+strconv.Itoa(int(qID)), groupInput{Name: "q-updated", Enabled: true})
 	assert.Equal(t, http.StatusOK, w.Code)
 	w = h("GET", "/admin/groups", nil)
 	assert.Equal(t, http.StatusOK, w.Code)
-	assert.Contains(t, w.Body.String(), "Q-updated")
+	assert.Contains(t, w.Body.String(), "q-updated")
 
 	// Replace items on the seeded group (id=1) and verify ordering/content.
 	ms, _ := app.Store.ListModels()

@@ -144,7 +144,7 @@ func (l *lazyJudge) Judge(judgeModel *store.Model, candidates []routing.Candidat
 		return "", nil, err
 	}
 	apiKey, _ := store.Decrypt(l.key, prov.APIKey)
-	return routing.NewJudgeClient(l.disp, prov.BaseURL, apiKey, prov.Protocol).Judge(judgeModel, candidates, userText)
+	return routing.NewJudgeClient(l.disp, prov.BaseURL, apiKey, prov.Protocol, prov.ProxyURL).Judge(judgeModel, candidates, userText)
 }
 
 // ServeSPA registers a NoRoute handler to serve the embedded React SPA.

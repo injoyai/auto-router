@@ -119,23 +119,19 @@ export default function Sources() {
   const openCreateProv = () => {
     setEditingProv(null)
     provForm.resetFields()
-    provForm.setFieldsValue({ protocol: 'openai', enabled: true })
+    provForm.setFieldsValue({ name: '', base_url: '', api_key: '', protocol: 'openai', enabled: true, proxy_url: '' })
     setProvModalOpen(true)
   }
   const openEditProv = (p: ProviderType) => {
     setEditingProv(p)
     provForm.setFieldsValue({
       ...p,
-      api_key: p.has_api_key ? '********' : '',
+      api_key: p.api_key ?? '',
     })
     setProvModalOpen(true)
   }
   const handleProvSubmit = async () => {
     const vals = await provForm.validateFields()
-    // 占位符不提交，后端空值会保留原 key
-    if (vals.api_key === '********') {
-      vals.api_key = ''
-    }
     try {
       if (editingProv) {
         await updateProvMut.mutateAsync({ id: editingProv.id, data: vals })
@@ -195,7 +191,6 @@ export default function Sources() {
 
   const modelColumns = [
     { title: '名称', dataIndex: 'name', key: 'name' },
-    { title: '显示名', dataIndex: 'display_name', key: 'display_name' },
     { title: '描述', dataIndex: 'description', key: 'description', ellipsis: true },
     {
       title: '判定', key: 'is_judge',
@@ -289,6 +284,7 @@ export default function Sources() {
           onOk={handleProvSubmit}
           onCancel={() => setProvModalOpen(false)}
           confirmLoading={createProvMut.isPending || updateProvMut.isPending}
+          destroyOnClose
         >
           <Form form={provForm} layout="vertical">
             <Form.Item name="name" label="名称" rules={[{ required: true, message: '请输入名称' }]}>
@@ -298,10 +294,13 @@ export default function Sources() {
               <Input placeholder="https://api.openai.com/v1" />
             </Form.Item>
             <Form.Item name="api_key" label="API Key" rules={[{ required: !editingProv, message: '请输入密钥' }]}>
-              <Input.Password placeholder={editingProv ? '留空保持不变' : '请输入密钥'} />
+              <Input.Password placeholder="请输入密钥" />
             </Form.Item>
             <Form.Item name="protocol" label="协议" rules={[{ required: true }]}>
               <Select options={[{ value: 'openai', label: 'OpenAI' }, { value: 'claude', label: 'Claude' }]} />
+            </Form.Item>
+            <Form.Item name="proxy_url" label="代理地址" tooltip="可选，设置后通过该 HTTP/HTTPS 代理请求上游 API，方便访问海外源">
+              <Input placeholder="http://127.0.0.1:7890" />
             </Form.Item>
             <Form.Item name="enabled" label="启用" valuePropName="checked">
               <Switch />
@@ -326,9 +325,6 @@ export default function Sources() {
           <Form form={modelForm} layout="vertical">
             <Form.Item name="name" label="名称" rules={[{ required: true }]}>
               <Input placeholder="发给上游的真实 model id" />
-            </Form.Item>
-            <Form.Item name="display_name" label="显示名" rules={[{ required: true }]}>
-              <Input />
             </Form.Item>
             <Form.Item name="provider_id" label="API 源" rules={[{ required: true }]}>
               <Select

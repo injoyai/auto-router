@@ -99,7 +99,7 @@ func (a *App) handleChat(c *gin.Context, clientFmt string, parseInbound func(map
 		} else {
 			body, _ = openai.BuildUpstreamRequest(req)
 		}
-		resp, retryCount, err = a.Dispatcher.CallWithRetry(c.Request.Context(), prov.BaseURL, apiKey, prov.Protocol, body, prov.RetryMax, prov.RetryBackoffMs)
+		resp, retryCount, err = a.Dispatcher.CallWithRetry(c.Request.Context(), prov.BaseURL, apiKey, prov.Protocol, prov.ProxyURL, body, prov.RetryMax, prov.RetryBackoffMs)
 		if err == nil {
 			dec.FailoverCount = i
 			break
@@ -168,7 +168,7 @@ func (a *App) streamResponse(c *gin.Context, dec *routing.Decision, req *model.C
 			enc = openaiChunkEncoder{}
 		}
 		started := false
-		rc, streamErr := a.Dispatcher.CallStreamWithRetry(prov.BaseURL, apiKey, prov.Protocol, body, prov.RetryMax, prov.RetryBackoffMs, func(ch *model.Chunk) error {
+		rc, streamErr := a.Dispatcher.CallStreamWithRetry(prov.BaseURL, apiKey, prov.Protocol, prov.ProxyURL, body, prov.RetryMax, prov.RetryBackoffMs, func(ch *model.Chunk) error {
 			started = true
 			if ch != nil && ch.Usage != nil {
 				usage = ch.Usage

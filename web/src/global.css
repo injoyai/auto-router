@@ -107,7 +107,14 @@ h1, h2, h3, h4, h5, h6 {
   backdrop-filter: var(--glass-blur-strong);
   -webkit-backdrop-filter: var(--glass-blur-strong);
   border-right: 1px solid var(--glass-border) !important;
-  position: relative;
+  /* 固定视口高度 + sticky，内容再长菜单也不滚动 */
+  position: sticky !important;
+  top: 0;
+  height: 100vh;
+  align-self: flex-start;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .aurora-brand {
@@ -120,6 +127,7 @@ h1, h2, h3, h4, h5, h6 {
   display: flex;
   align-items: center;
   gap: 10px;
+  flex-shrink: 0;
 }
 
 .aurora-brand-icon {
@@ -145,13 +153,18 @@ h1, h2, h3, h4, h5, h6 {
   padding: 0 20px 24px;
   border-bottom: 1px solid var(--sand-100);
   margin-bottom: 14px;
+  flex-shrink: 0;
 }
 
-/* 菜单 */
+/* 菜单 - 占据剩余空间，自身可滚动 */
 .aurora-sidebar .ant-menu {
   background: transparent !important;
   border-right: none !important;
   padding: 0 10px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .aurora-sidebar .ant-menu-item {
@@ -178,24 +191,63 @@ h1, h2, h3, h4, h5, h6 {
 
 .aurora-sidebar .ant-menu-item .anticon { font-size: 16px !important; }
 
-/* 退出按钮 */
+/* 侧边栏底部 - 退出登录区域 */
+.aurora-sidebar-foot {
+  flex-shrink: 0;
+  padding: 16px 16px 20px;
+  border-top: 1px solid var(--sand-100);
+  background: linear-gradient(to bottom, rgba(250, 248, 243, 0) 0%, rgba(250, 248, 243, 0.55) 60%);
+  position: relative;
+}
+
+.aurora-sidebar-foot::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 16px;
+  right: 16px;
+  height: 1px;
+  background: linear-gradient(to right, transparent, var(--glass-border), transparent);
+}
+
+/* 退出按钮 - 高级毛玻璃 + 悬浮危险态 */
 .aurora-logout {
+  position: relative;
   background: var(--glass-bg) !important;
   backdrop-filter: var(--glass-blur);
   -webkit-backdrop-filter: var(--glass-blur);
   border: 1px solid var(--sand-200) !important;
-  color: var(--sand-500) !important;
-  font-weight: 500;
-  border-radius: var(--radius-sm) !important;
-  height: 42px !important;
-  transition: all 0.25s ease !important;
+  color: var(--sand-600) !important;
+  font-weight: 600;
+  font-size: 13px;
+  letter-spacing: 0.01em;
+  border-radius: var(--radius-md) !important;
+  height: 44px !important;
+  box-shadow: var(--shadow-xs);
+  transition: all 0.28s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  overflow: hidden;
+}
+
+.aurora-logout .anticon {
+  transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+  font-size: 15px !important;
 }
 
 .aurora-logout:hover {
   border-color: var(--red) !important;
   color: var(--red) !important;
   background: var(--red-light) !important;
+  box-shadow: 0 10px 24px rgba(208, 90, 74, 0.22) !important;
   transform: translateY(-2px);
+}
+
+.aurora-logout:hover .anticon {
+  transform: translateX(3px);
+}
+
+.aurora-logout:active {
+  transform: translateY(0);
+  box-shadow: 0 4px 12px rgba(208, 90, 74, 0.18) !important;
 }
 
 /* ============================================
@@ -558,4 +610,214 @@ h1, h2, h3, h4, h5, h6 {
   font-size: 14px;
   color: var(--sand-400);
   margin-bottom: 32px;
+}
+
+/* ============================================
+   模型队列 - 成员卡片
+   ============================================ */
+.queue-member {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: var(--radius-md) !important;
+  background: var(--glass-bg) !important;
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--sand-100) !important;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  width: 100%;
+  max-width: 480px;
+}
+
+.queue-member:hover {
+  border-color: var(--primary-border) !important;
+  background: var(--glass-bg-strong) !important;
+  box-shadow: var(--shadow-sm);
+}
+
+.queue-member-dragging {
+  opacity: 0.4;
+  transform: scale(0.98) !important;
+}
+
+.queue-member-drag-over {
+  border-color: var(--primary) !important;
+  border-top: 2px solid var(--primary) !important;
+}
+
+.queue-member-handle {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, var(--primary), var(--primary-hover));
+  color: #fff;
+  cursor: grab;
+  box-shadow: 0 2px 6px rgba(58, 107, 77, 0.25);
+  transition: all 0.2s ease;
+}
+
+.queue-member-handle:hover {
+  color: var(--sand-500);
+  background: var(--sand-100);
+}
+
+.queue-member-handle:active {
+  cursor: grabbing;
+}
+
+.queue-member-index {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, var(--primary), var(--primary-hover));
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 6px rgba(58, 107, 77, 0.25);
+}
+
+.queue-member-info {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex: 1;
+  min-width: 0;
+}
+
+.queue-member-provider {
+  font-size: 11px;
+  color: var(--sand-400);
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.queue-member-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--sand-800);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.queue-member-close {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  border: none !important;
+  background: transparent !important;
+  color: var(--sand-300) !important;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0;
+  transition: all 0.2s ease;
+  font-size: 12px;
+}
+
+.queue-member:hover .queue-member-close {
+  opacity: 1;
+}
+
+.queue-member-close:hover {
+  background: var(--red-light) !important;
+  color: var(--red) !important;
+}
+
+/* 添加模型区域 */
+.queue-add-btn {
+  width: fit-content;
+  min-width: 220px;
+  border: 1.5px dashed var(--sand-200) !important;
+  border-radius: var(--radius-md) !important;
+  background: transparent !important;
+  color: var(--sand-400) !important;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+
+.queue-add-btn:hover {
+  border-color: var(--primary-border) !important;
+  color: var(--primary) !important;
+  background: var(--primary-light) !important;
+}
+
+/* ============================================
+   图表卡片 - 环形饼图高级容器
+   ============================================ */
+.aurora-chart-card .ant-card-body {
+  position: relative;
+  padding: 18px 16px 8px !important;
+}
+
+/* 环形图背后的柔和光晕 - 营造悬浮与深度 */
+.aurora-chart-card .ant-card-body::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 260px;
+  height: 260px;
+  transform: translate(-50%, -54%);
+  background:
+    radial-gradient(circle at 50% 50%, rgba(180, 212, 188, 0.35), transparent 62%),
+    radial-gradient(circle at 40% 40%, rgba(212, 160, 76, 0.12), transparent 70%);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 0;
+  transition: opacity 0.4s ease;
+  opacity: 0.85;
+}
+
+/* 卡片悬浮时光晕增强 */
+.aurora-chart-card:hover .ant-card-body::before {
+  opacity: 1;
+  width: 290px;
+  height: 290px;
+}
+
+/* 画布与图例置于光晕之上 */
+.aurora-chart-card .ant-card-body > div,
+.aurora-chart-card .ant-card-body > canvas {
+  position: relative;
+  z-index: 1;
+}
+
+/* 图例项 hover 微交互 */
+.aurora-chart-card .antv-chart-legend-item {
+  transition: all 0.2s ease !important;
+  border-radius: 6px;
+  padding: 2px 6px;
+}
+.aurora-chart-card .antv-chart-legend-item:hover {
+  background: var(--primary-light);
+  transform: translateY(-1px);
+}
+
+/* 空状态 */
+.aurora-chart-empty {
+  color: var(--sand-400);
+  text-align: center;
+  padding: 80px 40px;
+  font-size: 14px;
+  letter-spacing: 0.02em;
 }

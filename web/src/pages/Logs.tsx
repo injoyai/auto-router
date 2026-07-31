@@ -69,6 +69,7 @@ export default function Logs() {
     },
     { title: '请求模型', dataIndex: 'requested_model', key: 'requested_model', width: 120 },
     { title: '路由模型', dataIndex: 'routed_model', key: 'routed_model', width: 120 },
+    { title: '服务商', dataIndex: 'provider_name', key: 'provider_name', width: 100, render: (v: string) => v || '-' },
     {
       title: '路由类型', dataIndex: 'route_reason', key: 'route_reason', width: 100,
       render: (v: string) => <Tag color={reasonColors[v] ?? 'default'}>{reasonLabels[v] ?? v}</Tag>,

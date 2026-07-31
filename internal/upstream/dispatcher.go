@@ -10,7 +10,9 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"auto-router/internal/adapter/claude"
@@ -37,27 +39,55 @@ func isRetryable(err error) bool {
 }
 
 type Dispatcher struct {
-	Client *http.Client
+	Client       *http.Client
+	proxyClients map[string]*http.Client
+	mu           sync.Mutex
 }
 
 func New() *Dispatcher {
-	return &Dispatcher{Client: &http.Client{Timeout: 5 * time.Minute}}
+	return &Dispatcher{
+		Client:       &http.Client{Timeout: 5 * time.Minute},
+		proxyClients: make(map[string]*http.Client),
+	}
+}
+
+// clientFor returns the default client if proxyURL is empty, or a cached
+// client configured with the given HTTP/HTTPS proxy.
+func (d *Dispatcher) clientFor(proxyURL string) *http.Client {
+	if proxyURL == "" {
+		return d.Client
+	}
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if c, ok := d.proxyClients[proxyURL]; ok {
+		return c
+	}
+	u, err := url.Parse(proxyURL)
+	if err != nil {
+		return d.Client
+	}
+	c := &http.Client{
+		Timeout:   5 * time.Minute,
+		Transport: &http.Transport{Proxy: http.ProxyURL(u)},
+	}
+	d.proxyClients[proxyURL] = c
+	return c
 }
 
 // Call performs a non-streaming upstream request and returns the parsed canonical response.
-func (d *Dispatcher) Call(baseURL, apiKey, protocol string, body map[string]any) (*model.ChatResponse, error) {
-	return d.CallCtx(context.Background(), baseURL, apiKey, protocol, body)
+func (d *Dispatcher) Call(baseURL, apiKey, protocol, proxyURL string, body map[string]any) (*model.ChatResponse, error) {
+	return d.CallCtx(context.Background(), baseURL, apiKey, protocol, proxyURL, body)
 }
 
 // CallCtx is the context-aware variant of Call.
-func (d *Dispatcher) CallCtx(ctx context.Context, baseURL, apiKey, protocol string, body map[string]any) (*model.ChatResponse, error) {
-	return d.callOnce(ctx, baseURL, apiKey, protocol, body)
+func (d *Dispatcher) CallCtx(ctx context.Context, baseURL, apiKey, protocol, proxyURL string, body map[string]any) (*model.ChatResponse, error) {
+	return d.callOnce(ctx, baseURL, apiKey, protocol, proxyURL, body)
 }
 
 // callOnce performs a single non-streaming upstream request and returns the
 // parsed canonical response. Network and HTTP errors are wrapped in
 // *upstreamError so callers can make retry decisions.
-func (d *Dispatcher) callOnce(ctx context.Context, baseURL, apiKey, protocol string, body map[string]any) (*model.ChatResponse, error) {
+func (d *Dispatcher) callOnce(ctx context.Context, baseURL, apiKey, protocol, proxyURL string, body map[string]any) (*model.ChatResponse, error) {
 	b, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
@@ -69,7 +99,7 @@ func (d *Dispatcher) callOnce(ctx context.Context, baseURL, apiKey, protocol str
 	}
 	req.Header.Set("Content-Type", "application/json")
 	setUpstreamAuthHeaders(req, apiKey, protocol)
-	resp, err := d.Client.Do(req)
+	resp, err := d.clientFor(proxyURL).Do(req)
 	if err != nil {
 		return nil, &upstreamError{Status: 0, Message: err.Error()}
 	}
@@ -91,7 +121,7 @@ func (d *Dispatcher) callOnce(ctx context.Context, baseURL, apiKey, protocol str
 
 // CallWithRetry calls callOnce with retry logic. Returns the response,
 // the number of retries performed, and the last error.
-func (d *Dispatcher) CallWithRetry(ctx context.Context, baseURL, apiKey, protocol string, body map[string]any, retryMax, backoffMs int) (*model.ChatResponse, int, error) {
+func (d *Dispatcher) CallWithRetry(ctx context.Context, baseURL, apiKey, protocol, proxyURL string, body map[string]any, retryMax, backoffMs int) (*model.ChatResponse, int, error) {
 	var lastErr error
 	retries := 0
 	for attempt := 0; attempt <= retryMax; attempt++ {
@@ -99,7 +129,7 @@ func (d *Dispatcher) CallWithRetry(ctx context.Context, baseURL, apiKey, protoco
 			time.Sleep(time.Duration(backoffMs*(1<<(attempt-1))) * time.Millisecond)
 			retries++
 		}
-		resp, err := d.callOnce(ctx, baseURL, apiKey, protocol, body)
+		resp, err := d.callOnce(ctx, baseURL, apiKey, protocol, proxyURL, body)
 		if err == nil {
 			return resp, retries, nil
 		}
@@ -116,15 +146,15 @@ type StreamChunk = *model.Chunk
 
 // CallStream performs a streaming upstream request and invokes onChunk for
 // each parsed SSE chunk as it arrives (real streaming, not buffered).
-func (d *Dispatcher) CallStream(baseURL, apiKey, protocol string, body map[string]any, onChunk func(StreamChunk) error) error {
-	return d.callStreamOnce(baseURL, apiKey, protocol, body, onChunk)
+func (d *Dispatcher) CallStream(baseURL, apiKey, protocol, proxyURL string, body map[string]any, onChunk func(StreamChunk) error) error {
+	return d.callStreamOnce(baseURL, apiKey, protocol, proxyURL, body, onChunk)
 }
 
 // callStreamOnce performs a single streaming upstream request and invokes
 // onChunk for each parsed SSE chunk as it arrives (real streaming, not
 // buffered). Network and HTTP errors are wrapped in *upstreamError so callers
 // can make retry decisions. Scanner and onChunk errors are returned as-is.
-func (d *Dispatcher) callStreamOnce(baseURL, apiKey, protocol string, body map[string]any, onChunk func(StreamChunk) error) error {
+func (d *Dispatcher) callStreamOnce(baseURL, apiKey, protocol, proxyURL string, body map[string]any, onChunk func(StreamChunk) error) error {
 	b, err := json.Marshal(body)
 	if err != nil {
 		return err
@@ -134,7 +164,7 @@ func (d *Dispatcher) callStreamOnce(baseURL, apiKey, protocol string, body map[s
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "text/event-stream")
 	setUpstreamAuthHeaders(req, apiKey, protocol)
-	resp, err := d.Client.Do(req)
+	resp, err := d.clientFor(proxyURL).Do(req)
 	if err != nil {
 		return &upstreamError{Status: 0, Message: err.Error()}
 	}
@@ -192,7 +222,7 @@ func (d *Dispatcher) callStreamOnce(baseURL, apiKey, protocol string, body map[s
 // Retries only BEFORE the first chunk is sent (pre-first-byte). Once output
 // has started, errors are returned immediately to avoid duplicate content.
 // Returns the number of retries performed and the last error.
-func (d *Dispatcher) CallStreamWithRetry(baseURL, apiKey, protocol string, body map[string]any, retryMax, backoffMs int, onChunk func(StreamChunk) error) (int, error) {
+func (d *Dispatcher) CallStreamWithRetry(baseURL, apiKey, protocol, proxyURL string, body map[string]any, retryMax, backoffMs int, onChunk func(StreamChunk) error) (int, error) {
 	var lastErr error
 	retries := 0
 	for attempt := 0; attempt <= retryMax; attempt++ {
@@ -201,7 +231,7 @@ func (d *Dispatcher) CallStreamWithRetry(baseURL, apiKey, protocol string, body 
 			retries++
 		}
 		started := false
-		err := d.callStreamOnce(baseURL, apiKey, protocol, body, func(ch StreamChunk) error {
+		err := d.callStreamOnce(baseURL, apiKey, protocol, proxyURL, body, func(ch StreamChunk) error {
 			started = true
 			return onChunk(ch)
 		})
@@ -223,11 +253,11 @@ func (d *Dispatcher) CallStreamWithRetry(baseURL, apiKey, protocol string, body 
 
 // TestConnect issues a GET {baseURL}/models to verify connectivity + credentials.
 // Returns the HTTP status, the (truncated) response body, and any transport error.
-func (d *Dispatcher) TestConnect(baseURL, apiKey, protocol string) (int, string, error) {
+func (d *Dispatcher) TestConnect(baseURL, apiKey, protocol, proxyURL string) (int, string, error) {
 	req, _ := http.NewRequest(http.MethodGet, baseURL+"/models", nil)
 	setUpstreamAuthHeaders(req, apiKey, protocol)
 	log.Printf("[INFO] test connectivity: %s %s (protocol=%s)", req.Method, req.URL.String(), protocol)
-	resp, err := d.Client.Do(req)
+	resp, err := d.clientFor(proxyURL).Do(req)
 	if err != nil {
 		log.Printf("[WARN] test connectivity failed: %v", err)
 		return 0, "", err
@@ -243,12 +273,12 @@ func (d *Dispatcher) TestConnect(baseURL, apiKey, protocol string) (int, string,
 
 // TestModel sends a minimal chat request to verify the model is usable.
 // Returns the HTTP status, the (truncated) response body, and any transport error.
-func (d *Dispatcher) TestModel(baseURL, apiKey, protocol, modelName string) (int, string, error) {
-	return d.TestModelCtx(context.Background(), baseURL, apiKey, protocol, modelName)
+func (d *Dispatcher) TestModel(baseURL, apiKey, protocol, proxyURL, modelName string) (int, string, error) {
+	return d.TestModelCtx(context.Background(), baseURL, apiKey, protocol, proxyURL, modelName)
 }
 
 // TestModelCtx is the context-aware variant of TestModel.
-func (d *Dispatcher) TestModelCtx(ctx context.Context, baseURL, apiKey, protocol, modelName string) (int, string, error) {
+func (d *Dispatcher) TestModelCtx(ctx context.Context, baseURL, apiKey, protocol, proxyURL, modelName string) (int, string, error) {
 	body := map[string]any{
 		"model":      modelName,
 		"messages":   []map[string]any{{"role": "user", "content": "hi"}},
@@ -266,7 +296,7 @@ func (d *Dispatcher) TestModelCtx(ctx context.Context, baseURL, apiKey, protocol
 	req.Header.Set("Content-Type", "application/json")
 	setUpstreamAuthHeaders(req, apiKey, protocol)
 	log.Printf("[INFO] test model: %s %s (protocol=%s, model=%s)", req.Method, req.URL.String(), protocol, modelName)
-	resp, err := d.Client.Do(req)
+	resp, err := d.clientFor(proxyURL).Do(req)
 	if err != nil {
 		log.Printf("[WARN] test model failed: %v", err)
 		return 0, "", err

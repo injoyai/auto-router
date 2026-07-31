@@ -19,7 +19,7 @@ func TestJudgeClientCallsUpstream(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	jc := NewJudgeClient(upstream.New(), srv.URL, "sk-judge", "openai")
+	jc := NewJudgeClient(upstream.New(), srv.URL, "sk-judge", "openai", "")
 	judgeModel := &store.Model{Name: "judge-mini"}
 	out, _, err := jc.Judge(judgeModel, []Candidate{{Name: "gpt-4o"}}, "hi")
 	assert.NoError(t, err)

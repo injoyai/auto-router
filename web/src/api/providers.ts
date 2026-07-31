@@ -4,12 +4,13 @@ export interface Provider {
   id: number
   name: string
   base_url: string
-  /** 仅用于请求体；后端 Provider.APIKey 标记 json:"-"，响应中不会返回。 */
+  /** 后端返回的解密 API Key（编辑时回填，前端默认掩码显示） */
   api_key?: string
   /** 后端返回，表示是否已保存 API Key */
   has_api_key?: boolean
   retry_max?: number
   retry_backoff_ms?: number
+  proxy_url?: string
   protocol: string
   enabled: boolean
 }

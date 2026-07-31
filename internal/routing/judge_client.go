@@ -17,13 +17,14 @@ type defaultJudgeClient struct {
 	baseURL  string
 	apiKey   string
 	protocol string
+	proxyURL string
 }
 
 // Compile-time guarantee that *defaultJudgeClient satisfies JudgeClient.
 var _ JudgeClient = (*defaultJudgeClient)(nil)
 
-func NewJudgeClient(d *upstream.Dispatcher, baseURL, apiKey, protocol string) *defaultJudgeClient {
-	return &defaultJudgeClient{disp: d, baseURL: baseURL, apiKey: apiKey, protocol: protocol}
+func NewJudgeClient(d *upstream.Dispatcher, baseURL, apiKey, protocol, proxyURL string) *defaultJudgeClient {
+	return &defaultJudgeClient{disp: d, baseURL: baseURL, apiKey: apiKey, protocol: protocol, proxyURL: proxyURL}
 }
 
 // Judge calls the judge model with a 10s timeout. The request body is built
@@ -59,7 +60,7 @@ func (j *defaultJudgeClient) Judge(judgeModel *store.Model, candidates []Candida
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	resp, err := j.disp.CallCtx(ctx, j.baseURL, j.apiKey, j.protocol, body)
+	resp, err := j.disp.CallCtx(ctx, j.baseURL, j.apiKey, j.protocol, j.proxyURL, body)
 	if err != nil {
 		return "", nil, err
 	}

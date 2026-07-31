@@ -10,7 +10,6 @@ import (
 type Model struct {
 	ID          uint      `gorm:"primaryKey" json:"id"`
 	Name        string    `gorm:"not null" json:"name"`
-	DisplayName string    `gorm:"not null" json:"display_name"`
 	ProviderID  uint      `gorm:"not null" json:"provider_id"`
 	Description string    `json:"description"`
 	Enabled     bool      `gorm:"default:true" json:"enabled"`
@@ -36,12 +35,6 @@ func (s *Store) GetModel(id uint) (*Model, error) {
 		return nil, err
 	}
 	return &m, nil
-}
-
-func (s *Store) GetModelByName(name string) (*Model, error) {
-	var m Model
-	err := s.DB.Where("name = ? OR display_name = ?", name, name).First(&m).Error
-	return &m, err
 }
 
 func (s *Store) CreateModel(m *Model) error {

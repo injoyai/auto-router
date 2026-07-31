@@ -8,12 +8,11 @@ import (
 
 // ModelGroup 是对外可路由的具名队列,映射到一组有序 Model。
 type ModelGroup struct {
-	ID          uint      `gorm:"primaryKey" json:"id"`
-	Name        string    `gorm:"uniqueIndex;not null" json:"name"`
-	DisplayName string    `gorm:"not null" json:"display_name"`
-	Description string    `json:"description"`
-	Enabled     bool      `gorm:"default:true" json:"enabled"`
-	CreatedAt   time.Time `json:"created_at"`
+	ID        uint      `gorm:"primaryKey" json:"id"`
+	Name      string    `gorm:"uniqueIndex;not null" json:"name"`
+	Remark    string    `json:"remark"`
+	Enabled   bool      `gorm:"default:true" json:"enabled"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 // ModelGroupItem 是队列内模型的有序关联,Position 升序即请求顺序。

@@ -18,7 +18,7 @@ const menuItems = [
   { key: '/sources', icon: <AppstoreOutlined />, label: '模型管理' },
   { key: '/queues', icon: <UnorderedListOutlined />, label: '模型队列' },
   { key: '/routing', icon: <SettingOutlined />, label: '路由配置' },
-  { key: '/logs', icon: <FileTextOutlined />, label: '日志' },
+  { key: '/logs', icon: <FileTextOutlined />, label: '请求日志' },
   { key: '/tokens', icon: <FireOutlined />, label: 'Token 统计' },
 ]
 
@@ -50,7 +50,7 @@ export default function Layout() {
           items={menuItems}
           onClick={({ key }) => navigate(key)}
         />
-        <div style={{ position: 'absolute', bottom: 0, width: '100%', padding: '16px 16px' }}>
+        <div className="aurora-sidebar-foot">
           <Button icon={<LogoutOutlined />} block onClick={handleLogout} className="aurora-logout">
             退出登录
           </Button>

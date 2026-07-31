@@ -4,8 +4,7 @@ import type { Model } from './models'
 export interface ModelGroup {
   id: number
   name: string
-  display_name: string
-  description: string
+  remark?: string
   enabled: boolean
   item_count?: number
 }

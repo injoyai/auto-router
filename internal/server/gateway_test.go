@@ -120,14 +120,14 @@ func TestGatewayQueueFailoverNonStream(t *testing.T) {
 	pok := &store.Provider{Name: "ok", BaseURL: okSrv.URL, APIKey: store.Encrypt(key, "sk"), Protocol: "openai", Enabled: true}
 	assert.NoError(t, st.CreateProvider(pfail))
 	assert.NoError(t, st.CreateProvider(pok))
-	judge := &store.Model{Name: "judge-mini", DisplayName: "J", ProviderID: pfail.ID, Enabled: true}
+	judge := &store.Model{Name: "judge-mini", ProviderID: pfail.ID, Enabled: true}
 	assert.NoError(t, st.CreateModel(judge))
 	assert.NoError(t, st.SetJudgeModel(judge.ID))
-	m1 := &store.Model{Name: "m1", DisplayName: "1", ProviderID: pfail.ID, Enabled: true}
-	m2 := &store.Model{Name: "m2", DisplayName: "2", ProviderID: pok.ID, Enabled: true}
+	m1 := &store.Model{Name: "m1", ProviderID: pfail.ID, Enabled: true}
+	m2 := &store.Model{Name: "m2", ProviderID: pok.ID, Enabled: true}
 	assert.NoError(t, st.CreateModel(m1))
 	assert.NoError(t, st.CreateModel(m2))
-	g := &store.ModelGroup{Name: "q-failover", DisplayName: "Q", Enabled: true}
+	g := &store.ModelGroup{Name: "q-failover", Enabled: true}
 	assert.NoError(t, st.CreateModelGroup(g))
 	assert.NoError(t, st.ReplaceGroupItems(g.ID, []uint{m1.ID, m2.ID}))
 

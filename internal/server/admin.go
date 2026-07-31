@@ -54,6 +54,7 @@ type providerInput struct {
 	Enabled        bool   `json:"enabled"`
 	RetryMax       int    `json:"retry_max"`
 	RetryBackoffMs int    `json:"retry_backoff_ms"`
+	ProxyURL       string `json:"proxy_url"`
 }
 
 func (a *App) handleListProviders(c *gin.Context) {
@@ -64,6 +65,9 @@ func (a *App) handleListProviders(c *gin.Context) {
 	}
 	for i := range ps {
 		ps[i].HasAPIKey = ps[i].APIKey != ""
+		if ps[i].APIKey != "" {
+			ps[i].APIKeyPlain, _ = store.Decrypt(a.CryptoKey, ps[i].APIKey)
+		}
 	}
 	c.JSON(http.StatusOK, gin.H{"data": ps})
 }
@@ -81,6 +85,7 @@ func (a *App) handleCreateProvider(c *gin.Context) {
 		Enabled:        in.Enabled,
 		RetryMax:       in.RetryMax,
 		RetryBackoffMs: in.RetryBackoffMs,
+		ProxyURL:       in.ProxyURL,
 	}
 	if in.APIKey != "" {
 		p.APIKey = store.Encrypt(a.CryptoKey, in.APIKey)
@@ -90,6 +95,7 @@ func (a *App) handleCreateProvider(c *gin.Context) {
 		return
 	}
 	p.HasAPIKey = p.APIKey != ""
+	p.APIKeyPlain = in.APIKey
 	c.JSON(http.StatusOK, p)
 }
 
@@ -111,6 +117,7 @@ func (a *App) handleUpdateProvider(c *gin.Context) {
 	p.Enabled = in.Enabled
 	p.RetryMax = in.RetryMax
 	p.RetryBackoffMs = in.RetryBackoffMs
+	p.ProxyURL = in.ProxyURL
 	if in.APIKey != "" {
 		p.APIKey = store.Encrypt(a.CryptoKey, in.APIKey)
 	}
@@ -119,6 +126,11 @@ func (a *App) handleUpdateProvider(c *gin.Context) {
 		return
 	}
 	p.HasAPIKey = p.APIKey != ""
+	if in.APIKey != "" {
+		p.APIKeyPlain = in.APIKey
+	} else if p.APIKey != "" {
+		p.APIKeyPlain, _ = store.Decrypt(a.CryptoKey, p.APIKey)
+	}
 	c.JSON(http.StatusOK, p)
 }
 
@@ -150,7 +162,7 @@ func (a *App) handleTestProvider(c *gin.Context) {
 	}
 	apiKey, _ := store.Decrypt(a.CryptoKey, p.APIKey)
 	start := time.Now()
-	status, respBody, err := a.Dispatcher.TestConnect(p.BaseURL, apiKey, p.Protocol)
+	status, respBody, err := a.Dispatcher.TestConnect(p.BaseURL, apiKey, p.Protocol, p.ProxyURL)
 	latency := time.Since(start).Milliseconds()
 
 	// Persist a test log row so provider connectivity checks show up in the
@@ -203,7 +215,7 @@ func (a *App) handleTestModel(c *gin.Context) {
 	defer cancel()
 
 	start := time.Now()
-	status, respBody, err := a.Dispatcher.TestModelCtx(ctx, prov.BaseURL, apiKey, prov.Protocol, m.Name)
+	status, respBody, err := a.Dispatcher.TestModelCtx(ctx, prov.BaseURL, apiKey, prov.Protocol, prov.ProxyURL, m.Name)
 	latency := time.Since(start).Milliseconds()
 
 	if err != nil {
@@ -327,7 +339,6 @@ func (a *App) handleUpdateModel(c *gin.Context) {
 		return
 	}
 	m.Name = body.Name
-	m.DisplayName = body.DisplayName
 	m.ProviderID = body.ProviderID
 	m.Description = body.Description
 	m.Enabled = body.Enabled
@@ -487,10 +498,9 @@ func tokenSumCompletion(rows []store.TokenStatRow) int64 {
 // ---- Model Groups (queues) ----
 
 type groupInput struct {
-	Name        string `json:"name"`
-	DisplayName string `json:"display_name"`
-	Description string `json:"description"`
-	Enabled     bool   `json:"enabled"`
+	Name    string `json:"name"`
+	Remark  string `json:"remark"`
+	Enabled bool   `json:"enabled"`
 }
 
 func (a *App) handleListGroups(c *gin.Context) {
@@ -518,7 +528,7 @@ func (a *App) handleCreateGroup(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	g := store.ModelGroup{Name: in.Name, DisplayName: in.DisplayName, Description: in.Description, Enabled: in.Enabled}
+	g := store.ModelGroup{Name: in.Name, Remark: in.Remark, Enabled: in.Enabled}
 	if err := a.Store.CreateModelGroup(&g); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -539,8 +549,7 @@ func (a *App) handleUpdateGroup(c *gin.Context) {
 		return
 	}
 	g.Name = in.Name
-	g.DisplayName = in.DisplayName
-	g.Description = in.Description
+	g.Remark = in.Remark
 	g.Enabled = in.Enabled
 	if err := a.Store.UpdateModelGroup(g); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})

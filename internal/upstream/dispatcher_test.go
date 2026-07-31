@@ -23,7 +23,7 @@ func TestCallNonStream(t *testing.T) {
 	defer srv.Close()
 
 	d := New()
-	resp, err := d.Call(srv.URL, "sk-test", "openai", map[string]any{"model": "gpt-4", "messages": []model.Message{{Role: "user", Content: "x"}}})
+	resp, err := d.Call(srv.URL, "sk-test", "openai", "", map[string]any{"model": "gpt-4", "messages": []model.Message{{Role: "user", Content: "x"}}})
 	assert.NoError(t, err)
 	assert.Equal(t, "hi", resp.Choices[0].Message.Content)
 }
@@ -39,7 +39,7 @@ func TestCallClaudeNonStream(t *testing.T) {
 	defer srv.Close()
 
 	d := New()
-	resp, err := d.Call(srv.URL, "sk-claude", "claude", map[string]any{"model": "claude-3", "messages": []map[string]any{{"role": "user", "content": "x"}}, "max_tokens": 100})
+	resp, err := d.Call(srv.URL, "sk-claude", "claude", "", map[string]any{"model": "claude-3", "messages": []map[string]any{{"role": "user", "content": "x"}}, "max_tokens": 100})
 	assert.NoError(t, err)
 	assert.Equal(t, "hi", resp.Choices[0].Message.Content)
 	assert.Equal(t, "stop", resp.Choices[0].FinishReason)
@@ -57,7 +57,7 @@ func TestCallStream(t *testing.T) {
 	d := New()
 	var contents []string
 	var sawDone bool
-	err := d.CallStream(srv.URL, "sk-test", "openai", map[string]any{"model": "gpt-4", "stream": true}, func(ch StreamChunk) error {
+	err := d.CallStream(srv.URL, "sk-test", "openai", "", map[string]any{"model": "gpt-4", "stream": true}, func(ch StreamChunk) error {
 		if ch == nil {
 			sawDone = true
 			return nil
@@ -85,7 +85,7 @@ func TestCallClaudeStream(t *testing.T) {
 	d := New()
 	var contents []string
 	var sawDone bool
-	err := d.CallStream(srv.URL, "sk-claude", "claude", map[string]any{"model": "claude-3", "stream": true, "max_tokens": 100}, func(ch StreamChunk) error {
+	err := d.CallStream(srv.URL, "sk-claude", "claude", "", map[string]any{"model": "claude-3", "stream": true, "max_tokens": 100}, func(ch StreamChunk) error {
 		if ch == nil {
 			sawDone = true
 			return nil
@@ -115,7 +115,7 @@ func TestTestModel(t *testing.T) {
 	defer srv.Close()
 
 	d := New()
-	status, _, err := d.TestModel(srv.URL, "sk-test", "openai", "gpt-4o")
+	status, _, err := d.TestModel(srv.URL, "sk-test", "openai", "", "gpt-4o")
 	assert.NoError(t, err)
 	assert.Equal(t, http.StatusOK, status)
 }
@@ -128,7 +128,7 @@ func TestTestModelError(t *testing.T) {
 	defer srv.Close()
 
 	d := New()
-	status, _, err := d.TestModel(srv.URL, "sk-bad", "openai", "gpt-4o")
+	status, _, err := d.TestModel(srv.URL, "sk-bad", "openai", "", "gpt-4o")
 	assert.NoError(t, err)
 	assert.Equal(t, http.StatusUnauthorized, status)
 }
@@ -149,7 +149,7 @@ func TestCallWithRetrySuccess(t *testing.T) {
 
 	d := New()
 	// Use very short backoff for test speed
-	resp, retries, err := d.CallWithRetry(context.Background(), srv.URL, "sk-test", "openai", map[string]any{"model": "gpt-4", "messages": []map[string]any{{"role": "user", "content": "x"}}}, 3, 10)
+	resp, retries, err := d.CallWithRetry(context.Background(), srv.URL, "sk-test", "openai", "", map[string]any{"model": "gpt-4", "messages": []map[string]any{{"role": "user", "content": "x"}}}, 3, 10)
 	assert.NoError(t, err)
 	assert.Equal(t, "hi", resp.Choices[0].Message.Content)
 	assert.Equal(t, 2, retries)
@@ -166,7 +166,7 @@ func TestCallWithRetryNonRetryable(t *testing.T) {
 	defer srv.Close()
 
 	d := New()
-	resp, retries, err := d.CallWithRetry(context.Background(), srv.URL, "sk-bad", "openai", map[string]any{"model": "gpt-4", "messages": []map[string]any{{"role": "user", "content": "x"}}}, 3, 10)
+	resp, retries, err := d.CallWithRetry(context.Background(), srv.URL, "sk-bad", "openai", "", map[string]any{"model": "gpt-4", "messages": []map[string]any{{"role": "user", "content": "x"}}}, 3, 10)
 	assert.Error(t, err)
 	assert.Nil(t, resp)
 	assert.Equal(t, 0, retries) // 401 is not retryable, so 0 retries
@@ -190,7 +190,7 @@ func TestCallStreamWithRetryPreFirstByte(t *testing.T) {
 
 	d := New()
 	var contents []string
-	retries, err := d.CallStreamWithRetry(srv.URL, "sk-test", "openai", map[string]any{"model": "gpt-4", "stream": true}, 3, 10, func(ch StreamChunk) error {
+	retries, err := d.CallStreamWithRetry(srv.URL, "sk-test", "openai", "", map[string]any{"model": "gpt-4", "stream": true}, 3, 10, func(ch StreamChunk) error {
 		if ch == nil {
 			return nil
 		}
@@ -225,7 +225,7 @@ func TestCallStreamWithRetryNoRetryAfterOutput(t *testing.T) {
 
 	d := New()
 	var contents []string
-	retries, err := d.CallStreamWithRetry(srv.URL, "sk-test", "openai", map[string]any{"model": "gpt-4", "stream": true}, 3, 10, func(ch StreamChunk) error {
+	retries, err := d.CallStreamWithRetry(srv.URL, "sk-test", "openai", "", map[string]any{"model": "gpt-4", "stream": true}, 3, 10, func(ch StreamChunk) error {
 		if ch == nil {
 			return nil
 		}

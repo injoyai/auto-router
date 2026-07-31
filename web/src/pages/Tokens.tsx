@@ -24,6 +24,8 @@ export default function Tokens() {
   const providerRows = stats?.by_provider ?? []
 
   const modelColumns = [
+    { title: '服务商', dataIndex: 'provider', key: 'provider', width: 120,
+      render: (v: string) => v || '-' },
     { title: '模型名', dataIndex: 'model', key: 'model' },
     { title: '请求数', dataIndex: 'count', key: 'count', width: 100 },
     { title: '总Token', dataIndex: 'total_tokens', key: 'total_tokens', width: 120,

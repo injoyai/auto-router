@@ -52,7 +52,7 @@ export default function Routing() {
   if (isLoading) return <Spin size="large" style={{ display: 'block', marginTop: 48 }} />
 
   const enabledModels = (models ?? []).filter((m) => m.enabled)
-  const modelOptions = enabledModels.map((m) => ({ value: m.id, label: `${m.display_name} (${m.name})` }))
+  const modelOptions = enabledModels.map((m) => ({ value: m.id, label: m.name }))
   const enabledGroups = (groups ?? []).filter((g) => g.enabled)
   const groupOptions = enabledGroups.map((g) => ({ value: g.id, label: g.name }))
   const baseUrl = window.location.origin + '/v1'
@@ -62,8 +62,8 @@ export default function Routing() {
     message.success(`${label}已复制`)
   }
 
-  // 可用模型名称列表（含 auto）
-  const modelNames = ['auto', ...enabledModels.map((m) => m.name)]
+  // 可用模型名称列表（含 auto）- 对外暴露的是队列名
+  const modelNames = ['auto', ...enabledGroups.map((g) => g.name)]
 
   return (
     <div>

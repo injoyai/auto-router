@@ -3,7 +3,6 @@ import apiClient from './client'
 export interface Model {
   id: number
   name: string
-  display_name: string
   provider_id: number
   description: string
   enabled: boolean

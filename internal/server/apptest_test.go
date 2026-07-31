@@ -27,18 +27,18 @@ func newTestApp(t *testing.T, upstreamURL string) *testApp {
 	if err := st.CreateProvider(prov); err != nil {
 		t.Fatal(err)
 	}
-	judge := &store.Model{Name: "judge-mini", DisplayName: "Judge", ProviderID: prov.ID, Enabled: true}
+	judge := &store.Model{Name: "judge-mini", ProviderID: prov.ID, Enabled: true}
 	if err := st.CreateModel(judge); err != nil {
 		t.Fatal(err)
 	}
 	if err := st.SetJudgeModel(judge.ID); err != nil {
 		t.Fatal(err)
 	}
-	target := &store.Model{Name: "gpt-4o", DisplayName: "GPT4o", ProviderID: prov.ID, Enabled: true}
+	target := &store.Model{Name: "gpt-4o", ProviderID: prov.ID, Enabled: true}
 	if err := st.CreateModel(target); err != nil {
 		t.Fatal(err)
 	}
-	grp := &store.ModelGroup{Name: "deepseek-v4-flash", DisplayName: "DSV4", Enabled: true}
+	grp := &store.ModelGroup{Name: "deepseek-v4-flash", Enabled: true}
 	if err := st.CreateModelGroup(grp); err != nil {
 		t.Fatal(err)
 	}
@@ -72,18 +72,18 @@ func newTestAppWithProtocol(t *testing.T, upstreamURL, protocol string) *testApp
 	if err := st.CreateProvider(prov); err != nil {
 		t.Fatal(err)
 	}
-	judge := &store.Model{Name: "judge-mini", DisplayName: "Judge", ProviderID: prov.ID, Enabled: true}
+	judge := &store.Model{Name: "judge-mini", ProviderID: prov.ID, Enabled: true}
 	if err := st.CreateModel(judge); err != nil {
 		t.Fatal(err)
 	}
 	if err := st.SetJudgeModel(judge.ID); err != nil {
 		t.Fatal(err)
 	}
-	target := &store.Model{Name: "claude-3", DisplayName: "Claude", ProviderID: prov.ID, Enabled: true}
+	target := &store.Model{Name: "claude-3", ProviderID: prov.ID, Enabled: true}
 	if err := st.CreateModel(target); err != nil {
 		t.Fatal(err)
 	}
-	grp := &store.ModelGroup{Name: "claude-queue", DisplayName: "Claude Q", Enabled: true}
+	grp := &store.ModelGroup{Name: "claude-queue", Enabled: true}
 	if err := st.CreateModelGroup(grp); err != nil {
 		t.Fatal(err)
 	}

@@ -109,7 +109,7 @@ func (e *Engine) Route(req *model.ChatRequest) (*Decision, error) {
 			if err != nil || len(ch) == 0 {
 				continue
 			}
-			cands = append(cands, Candidate{Name: g.Name, Description: g.Description})
+			cands = append(cands, Candidate{Name: g.Name})
 			known = append(known, g.Name)
 		}
 		userText := TruncateUserText(req.LastUserMessage(), rc.JudgeMaxInputChars)

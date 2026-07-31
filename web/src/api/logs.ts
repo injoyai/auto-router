@@ -22,6 +22,7 @@ export interface RequestLog {
   judge_completion_tokens: number
   judge_total_tokens: number
   created_at: string
+  provider_name: string
 }
 
 export interface ListLogsParams {
