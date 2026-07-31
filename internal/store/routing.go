@@ -5,7 +5,8 @@ import "gorm.io/gorm"
 type RoutingConfig struct {
 	ID                 uint  `gorm:"primaryKey" json:"id"`
 	JudgeModelID       *uint `json:"judge_model_id"`
-	DefaultModelID     *uint `json:"default_model_id"`
+	DefaultModelID     *uint `json:"default_model_id"` // deprecated: 保留列以兼容旧库,代码不再使用
+	DefaultGroupID     *uint `json:"default_group_id"` // 默认兜底队列
 	JudgeMaxInputChars int   `gorm:"default:2000" json:"judge_max_input_chars"`
 }
 

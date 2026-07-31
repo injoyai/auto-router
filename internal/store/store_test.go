@@ -17,7 +17,7 @@ func newTestStore(t *testing.T) *Store {
 
 func TestOpenAutoMigrates(t *testing.T) {
 	s := newTestStore(t)
-	err := s.DB.AutoMigrate(&Provider{}, &Model{}, &RoutingConfig{}, &RequestLog{}, &Setting{})
+	err := s.DB.AutoMigrate(&Provider{}, &Model{}, &RoutingConfig{}, &RequestLog{}, &Setting{}, &ModelGroup{}, &ModelGroupItem{})
 	assert.NoError(t, err)
 
 	// Tables exist and are queryable. Open() also seeds the routing_configs

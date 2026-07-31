@@ -13,8 +13,10 @@ type RequestLog struct {
 	Status           int       `json:"status"`
 	LatencyMs        int64     `json:"latency_ms"`
 	Error            string    `json:"error"`
-	RetryCount       int       `json:"retry_count"`
-	PromptTokens     int       `json:"prompt_tokens"`
+	RetryCount       int    `json:"retry_count"`
+	ServedModel      string `json:"served_model"`   // 实际服务的模型名(队列=成功的那个)
+	FailoverCount    int    `json:"failover_count"` // 队列转移次数
+	PromptTokens     int    `json:"prompt_tokens"`
 	CompletionTokens int       `json:"completion_tokens"`
 	TotalTokens      int       `json:"total_tokens"`
 	// Judge call diagnostics. Populated only when the judge model was invoked
@@ -70,14 +72,17 @@ func (s *Store) TokenStatsTotal() (int64, error) {
 	return total, err
 }
 
-// TokenStatsByModel aggregates token usage grouped by routed_model,
-// ordered by total_tokens desc, limited to 10.
+// TokenStatsByModel aggregates token usage grouped by the model that actually
+// served the request (served_model, falling back to routed_model when
+// served_model is unset/NULL), ordered by total_tokens desc, limited to 10.
+// NULLIF is needed because GORM persists unset string fields as '' (not NULL),
+// which would otherwise prevent COALESCE from falling back to routed_model.
 func (s *Store) TokenStatsByModel() ([]TokenStatRow, error) {
 	var rows []TokenStatRow
 	err := s.DB.Model(&RequestLog{}).
-		Select("routed_model as model, count(*) as count, sum(prompt_tokens) as prompt_tokens, sum(completion_tokens) as completion_tokens, sum(total_tokens) as total_tokens").
-		Where("routed_model != '' AND total_tokens > 0").
-		Group("routed_model").
+		Select("COALESCE(NULLIF(served_model, ''), routed_model) as model, count(*) as count, sum(prompt_tokens) as prompt_tokens, sum(completion_tokens) as completion_tokens, sum(total_tokens) as total_tokens").
+		Where("COALESCE(NULLIF(served_model, ''), routed_model) != '' AND total_tokens > 0").
+		Group("COALESCE(NULLIF(served_model, ''), routed_model)").
 		Order("total_tokens desc").
 		Limit(10).
 		Scan(&rows).Error
@@ -85,14 +90,16 @@ func (s *Store) TokenStatsByModel() ([]TokenStatRow, error) {
 }
 
 // TokenStatsByProvider aggregates token usage grouped by provider name,
-// joining models+providers to resolve the provider name. Limited to 10.
+// joining models+providers to resolve the provider name. The join uses the
+// model that actually served the request (served_model, falling back to
+// routed_model). Limited to 10.
 func (s *Store) TokenStatsByProvider() ([]TokenStatRow, error) {
 	var rows []TokenStatRow
 	err := s.DB.Table("request_logs").
 		Select("providers.name as provider, count(*) as count, sum(request_logs.prompt_tokens) as prompt_tokens, sum(request_logs.completion_tokens) as completion_tokens, sum(request_logs.total_tokens) as total_tokens").
-		Joins("LEFT JOIN models ON request_logs.routed_model = models.name").
+		Joins("LEFT JOIN models ON COALESCE(NULLIF(request_logs.served_model, ''), request_logs.routed_model) = models.name").
 		Joins("LEFT JOIN providers ON models.provider_id = providers.id").
-		Where("request_logs.routed_model != '' AND request_logs.total_tokens > 0 AND providers.name != ''").
+		Where("COALESCE(NULLIF(request_logs.served_model, ''), request_logs.routed_model) != '' AND request_logs.total_tokens > 0 AND providers.name != ''").
 		Group("providers.name").
 		Order("total_tokens desc").
 		Limit(10).

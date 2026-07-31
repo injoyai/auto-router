@@ -341,7 +341,8 @@ func (a *App) handleUpdateModel(c *gin.Context) {
 func (a *App) handleDeleteModel(c *gin.Context) {
 	id, _ := strconv.Atoi(c.Param("id"))
 	// I10: reject deletion if the model is the judge or is referenced by
-	// routing_config.judge_model_id / default_model_id.
+	// routing_config.judge_model_id. Queue membership is a soft reference
+	// and is cascade-removed.
 	refs, err := a.Store.IsModelReferenced(uint(id))
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "not found"})

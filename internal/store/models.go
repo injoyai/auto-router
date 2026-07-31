@@ -53,12 +53,17 @@ func (s *Store) UpdateModel(m *Model) error {
 }
 
 func (s *Store) DeleteModel(id uint) error {
-	return s.DB.Delete(&Model{}, id).Error
+	return s.DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("model_id = ?", id).Delete(&ModelGroupItem{}).Error; err != nil {
+			return err
+		}
+		return tx.Delete(&Model{}, id).Error
+	})
 }
 
-// IsModelReferenced reports whether the model is the active judge
-// (is_judge=true) or is referenced by routing_config.judge_model_id /
-// default_model_id. Used by I10 to reject deletion of a model still in use.
+// IsModelReferenced 报告该模型是否为当前判定模型(judge)或被
+// routing_config.judge_model_id 引用。被队列引用属于软引用,删除时级联清理,
+// 不阻塞。default 兜底已改为队列,故不再检查 default。
 func (s *Store) IsModelReferenced(id uint) (bool, error) {
 	var m Model
 	if err := s.DB.First(&m, id).Error; err != nil {
@@ -72,9 +77,6 @@ func (s *Store) IsModelReferenced(id uint) (bool, error) {
 		return false, err
 	}
 	if rc.JudgeModelID != nil && *rc.JudgeModelID == id {
-		return true, nil
-	}
-	if rc.DefaultModelID != nil && *rc.DefaultModelID == id {
 		return true, nil
 	}
 	return false, nil

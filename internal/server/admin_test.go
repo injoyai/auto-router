@@ -121,12 +121,12 @@ func TestDeleteReferencedRejected(t *testing.T) {
 	app.Router.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusConflict, w.Code)
 
-	// Delete default model (id=2) -> 409 (default_model_id)
+	// Delete model id=2 (原默认模型,现仅被队列软引用) -> 200(级联清理 group items)
 	req = httptest.NewRequest(http.MethodDelete, "/admin/models/2", nil)
 	req.Header.Set("Authorization", "Bearer "+tok)
 	w = httptest.NewRecorder()
 	app.Router.ServeHTTP(w, req)
-	assert.Equal(t, http.StatusConflict, w.Code)
+	assert.Equal(t, http.StatusOK, w.Code)
 
 	// Create an unreferenced model + provider and delete them successfully.
 	prov := &store.Provider{Name: "p2", BaseURL: "http://x", APIKey: store.Encrypt(app.CryptoKey, "k"), Protocol: "openai", Enabled: true}
