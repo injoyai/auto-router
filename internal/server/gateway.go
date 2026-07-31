@@ -1,6 +1,7 @@
 package server
 
 import (
+	"fmt"
 	"net/http"
 	"time"
 
@@ -71,36 +72,45 @@ func (a *App) handleChat(c *gin.Context, clientFmt string, parseInbound func(map
 
 	requestedModel := req.Model
 
-	prov, err := a.Store.GetProvider(dec.Model.ProviderID)
-	if err != nil {
-		writeGatewayError(c, http.StatusServiceUnavailable, clientFmt, "provider not found", "router_error")
+	if req.Stream {
+		a.streamResponse(c, dec, req, requestedModel, start)
 		return
 	}
-	apiKey, _ := store.Decrypt(a.CryptoKey, prov.APIKey)
 
-	req.Model = dec.Model.Name
-
-	// Build upstream body based on UPSTREAM protocol
-	var body map[string]any
-	if prov.Protocol == "claude" {
-		body, _ = claude.BuildUpstreamRequest(req)
-	} else {
-		body, _ = openai.BuildUpstreamRequest(req)
-	}
-
+	// Non-streaming: iterate the chain; any failure fails over to the next model.
+	// Each model still uses its provider's RetryMax for retryable errors.
 	status := http.StatusOK
 	errMsg := ""
-	if req.Stream {
-		a.streamResponse(c, prov.BaseURL, apiKey, prov.Protocol, body, dec, req, requestedModel, start, prov.RetryMax, prov.RetryBackoffMs)
-		return
+	var resp *model.ChatResponse
+	var retryCount int
+	var lastErr error
+	for i, m := range dec.Models {
+		prov, perr := a.Store.GetProvider(m.ProviderID)
+		if perr != nil {
+			lastErr = fmt.Errorf("provider not found for model %s", m.Name)
+			continue
+		}
+		apiKey, _ := store.Decrypt(a.CryptoKey, prov.APIKey)
+		req.Model = m.Name
+		var body map[string]any
+		if prov.Protocol == "claude" {
+			body, _ = claude.BuildUpstreamRequest(req)
+		} else {
+			body, _ = openai.BuildUpstreamRequest(req)
+		}
+		resp, retryCount, err = a.Dispatcher.CallWithRetry(c.Request.Context(), prov.BaseURL, apiKey, prov.Protocol, body, prov.RetryMax, prov.RetryBackoffMs)
+		if err == nil {
+			dec.ServedModel = m.Name
+			dec.FailoverCount = i
+			break
+		}
+		lastErr = err
 	}
-	resp, retryCount, err := a.Dispatcher.CallWithRetry(c.Request.Context(), prov.BaseURL, apiKey, prov.Protocol, body, prov.RetryMax, prov.RetryBackoffMs)
-	if err != nil {
+	if resp == nil && lastErr != nil {
 		status = http.StatusBadGateway
-		errMsg = err.Error()
-		writeGatewayError(c, status, clientFmt, err.Error(), "upstream_error")
+		errMsg = lastErr.Error()
+		writeGatewayError(c, status, clientFmt, lastErr.Error(), "upstream_error")
 	} else {
-		// Encode response based on CLIENT protocol
 		var b []byte
 		if req.ClientFmt == "claude" {
 			b, _ = claude.EncodeResponseToClient(resp)
@@ -124,7 +134,7 @@ func (a *App) handleMessages(c *gin.Context) {
 	a.handleChat(c, "claude", claude.ParseRequest)
 }
 
-func (a *App) streamResponse(c *gin.Context, baseURL, apiKey, protocol string, body map[string]any, dec *routing.Decision, req *model.ChatRequest, requestedModel string, start time.Time, retryMax, backoffMs int) {
+func (a *App) streamResponse(c *gin.Context, dec *routing.Decision, req *model.ChatRequest, requestedModel string, start time.Time) {
 	c.Writer.Header().Set("Content-Type", "text/event-stream")
 	c.Writer.Header().Set("Cache-Control", "no-cache")
 	c.Writer.Header().Set("Connection", "keep-alive")
@@ -132,32 +142,63 @@ func (a *App) streamResponse(c *gin.Context, baseURL, apiKey, protocol string, b
 	status := http.StatusOK
 	errMsg := ""
 
-	// Choose encoder based on CLIENT protocol
 	var usage *model.Usage
-	var enc chunkEncoder
-	if req.ClientFmt == "claude" {
-		enc = &claudeChunkEncoder{enc: claude.NewStreamEncoder(dec.ModelName)}
-	} else {
-		enc = openaiChunkEncoder{}
-	}
-
-	retryCount, streamErr := a.Dispatcher.CallStreamWithRetry(baseURL, apiKey, protocol, body, retryMax, backoffMs, func(ch *model.Chunk) error {
-		if ch != nil && ch.Usage != nil {
-			usage = ch.Usage
+	retryCount := 0
+	var lastErr error
+	succeeded := false
+	for i, m := range dec.Models {
+		prov, perr := a.Store.GetProvider(m.ProviderID)
+		if perr != nil {
+			lastErr = fmt.Errorf("provider not found for model %s", m.Name)
+			continue
 		}
-		if ch == nil {
-			c.Writer.Write(enc.Finish())
+		apiKey, _ := store.Decrypt(a.CryptoKey, prov.APIKey)
+		req.Model = m.Name
+		var body map[string]any
+		if prov.Protocol == "claude" {
+			body, _ = claude.BuildUpstreamRequest(req)
+		} else {
+			body, _ = openai.BuildUpstreamRequest(req)
+		}
+		var enc chunkEncoder
+		if req.ClientFmt == "claude" {
+			enc = &claudeChunkEncoder{enc: claude.NewStreamEncoder(m.Name)}
+		} else {
+			enc = openaiChunkEncoder{}
+		}
+		started := false
+		rc, streamErr := a.Dispatcher.CallStreamWithRetry(prov.BaseURL, apiKey, prov.Protocol, body, prov.RetryMax, prov.RetryBackoffMs, func(ch *model.Chunk) error {
+			started = true
+			if ch != nil && ch.Usage != nil {
+				usage = ch.Usage
+			}
+			if ch == nil {
+				c.Writer.Write(enc.Finish())
+				flusher.Flush()
+				return nil
+			}
+			c.Writer.Write(enc.EncodeChunk(ch))
 			flusher.Flush()
 			return nil
+		})
+		retryCount = rc
+		if streamErr == nil {
+			dec.ServedModel = m.Name
+			dec.FailoverCount = i
+			succeeded = true
+			break
 		}
-		c.Writer.Write(enc.EncodeChunk(ch))
-		flusher.Flush()
-		return nil
-	})
-	if streamErr != nil {
+		lastErr = streamErr
+		if started {
+			// Output already started; cannot fail over without duplicating content.
+			break
+		}
+		// Pre-first-byte failure: try the next model in the chain.
+	}
+	if !succeeded && lastErr != nil {
 		status = http.StatusBadGateway
-		errMsg = streamErr.Error()
-		writeGatewayError(c, status, req.ClientFmt, streamErr.Error(), "upstream_error")
+		errMsg = lastErr.Error()
+		writeGatewayError(c, status, req.ClientFmt, lastErr.Error(), "upstream_error")
 	}
 	a.writeLog(req, dec, requestedModel, status, time.Since(start), errMsg, retryCount, usage)
 }
@@ -186,6 +227,8 @@ func (a *App) writeLog(req *model.ChatRequest, dec *routing.Decision, requestedM
 		LatencyMs:             dur.Milliseconds(),
 		Error:                 errMsg,
 		RetryCount:            retryCount,
+		ServedModel:           dec.ServedModel,
+		FailoverCount:         dec.FailoverCount,
 		PromptTokens:          prompt,
 		CompletionTokens:      completion,
 		TotalTokens:           total,
@@ -198,14 +241,18 @@ func (a *App) writeLog(req *model.ChatRequest, dec *routing.Decision, requestedM
 }
 
 func (a *App) handleListModels(c *gin.Context) {
-	ms, err := a.Store.ListEnabledModels()
+	gs, err := a.Store.ListEnabledModelGroups()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 	data := []gin.H{}
-	for _, m := range ms {
-		data = append(data, gin.H{"id": m.Name, "object": "model", "owned_by": "auto-router"})
+	for _, g := range gs {
+		chain, err := a.Store.GetGroupChain(g.ID)
+		if err != nil || len(chain) == 0 {
+			continue
+		}
+		data = append(data, gin.H{"id": g.Name, "object": "model", "owned_by": "auto-router"})
 	}
 	c.JSON(http.StatusOK, gin.H{"object": "list", "data": data})
 }
