@@ -25,5 +25,5 @@ WORKDIR /app
 COPY --from=go-builder /app/auto-router .
 RUN mkdir -p data/database config
 VOLUME ["/app/data", "/app/config"]
-EXPOSE 8080
+EXPOSE 9090
 ENTRYPOINT ["./auto-router"]

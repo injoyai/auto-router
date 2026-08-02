@@ -62,7 +62,7 @@ func Load() (Config, error) {
 	}
 	return Config{
 		Server: ServerConfig{
-			ListenAddr: firstNonEmpty(os.Getenv("SERVER_LISTEN_ADDR"), fc.Server.ListenAddr, ":8080"),
+			ListenAddr: firstNonEmpty(os.Getenv("SERVER_LISTEN_ADDR"), fc.Server.ListenAddr, ":9090"),
 			DevMode:    os.Getenv("SERVER_DEV") != "" || fc.Server.DevMode,
 		},
 		DB: DBConfig{
