@@ -22,3 +22,20 @@ func TestLastUserMessageEmpty(t *testing.T) {
 	req := &ChatRequest{}
 	assert.Equal(t, "", req.LastUserMessage())
 }
+
+func TestAllUserMessages(t *testing.T) {
+	req := &ChatRequest{
+		Messages: []Message{
+			{Role: "system", Content: "s"},
+			{Role: "user", Content: "first"},
+			{Role: "assistant", Content: "a"},
+			{Role: "user", Content: "second"},
+		},
+	}
+	assert.Equal(t, "first\nsecond", req.AllUserMessages())
+}
+
+func TestAllUserMessagesEmpty(t *testing.T) {
+	req := &ChatRequest{}
+	assert.Equal(t, "", req.AllUserMessages())
+}

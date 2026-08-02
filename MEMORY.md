@@ -59,7 +59,7 @@ web/
 - Token 统计通过子查询关联 models+providers 解析服务商
 
 ### RoutingConfig
-- `JudgeGroupID`, `DefaultGroupID`, `JudgeMaxInputChars`, `GatewayToken`
+- `JudgeGroupID`, `DefaultGroupID`, `GatewayToken`
 - 单例行 (ID=1)，首次启动自动 seed
 - `GatewayToken` 可在路由配置页手动编辑或点击刷新图标随机生成（48 字符 hex，`crypto.getRandomValues`）
 

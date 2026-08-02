@@ -245,11 +245,11 @@ export default function Queues() {
 
       <Modal title={editing ? '编辑队列' : '添加队列'} open={editOpen} onOk={submit} onCancel={() => setEditOpen(false)} confirmLoading={createMut.isPending || updateMut.isPending} destroyOnClose>
         <Form form={form} layout="vertical">
-          <Form.Item name="name" label="名称" rules={[{ required: true, message: '请输入名称' }]}>
-            <Input placeholder="如 deepseek-v4-flash" />
+          <Form.Item name="name" label="名称" tooltip="队列的唯一标识。如果未填写能力说明,判定模型将根据名称字面意思来选择队列,建议按实际配置的模型命名(如 deepseek-v4-flash、gpt-4o)" rules={[{ required: true, message: '请输入名称' }]}>
+            <Input placeholder="如 deepseek-v4-flash、gpt-4o" />
           </Form.Item>
-          <Form.Item name="remark" label="备注">
-            <Input placeholder="可选备注信息" />
+          <Form.Item name="remark" label="能力说明" tooltip="给判定模型看的队列能力描述,帮助判定模型根据任务选择合适的队列。留空时判定模型将仅根据名称字面意思判断,可能导致路由不准">
+            <Input.TextArea rows={2} placeholder="如:擅长代码生成、适合任务规划、低成本快速模型等。留空将根据名称判断" />
           </Form.Item>
           <Form.Item name="enabled" label="启用" valuePropName="checked"><Switch /></Form.Item>
         </Form>

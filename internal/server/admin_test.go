@@ -227,7 +227,7 @@ func TestAdminGroupsCRUDAndItems(t *testing.T) {
 
 	// Deleting the default group is rejected with 409.
 	defID := uint(1)
-	assert.NoError(t, app.Store.UpdateRoutingConfig(&store.RoutingConfig{ID: 1, DefaultGroupID: &defID, JudgeMaxInputChars: 1000}))
+	assert.NoError(t, app.Store.UpdateRoutingConfig(&store.RoutingConfig{ID: 1, DefaultGroupID: &defID}))
 	w = h("DELETE", "/admin/groups/1", nil)
 	assert.Equal(t, http.StatusConflict, w.Code)
 }

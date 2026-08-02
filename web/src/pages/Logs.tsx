@@ -1,7 +1,8 @@
 import { useState } from 'react'
-import { Table, Tag, Select, Input, Button, Space, Card } from 'antd'
-import { useQuery } from '@tanstack/react-query'
-import { listLogs } from '../api/logs'
+import { Table, Tag, Select, Input, Button, Space, Card, Modal, message } from 'antd'
+import { DeleteOutlined } from '@ant-design/icons'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { listLogs, clearLogs } from '../api/logs'
 import type { RequestLog } from '../api/logs'
 
 const reasonColors: Record<string, string> = {
@@ -43,6 +44,31 @@ export default function Logs() {
     queryKey: ['logs', page, pageSize, filters.reason, filters.model, searchNonce],
     queryFn: () => listLogs({ page, page_size: pageSize, reason: filters.reason, model: filters.model }),
   })
+
+  const queryClient = useQueryClient()
+  const clearMut = useMutation({
+    mutationFn: clearLogs,
+    onSuccess: () => {
+      message.success('已清空所有请求日志')
+      setPage(1)
+      queryClient.invalidateQueries({ queryKey: ['logs'] })
+      queryClient.invalidateQueries({ queryKey: ['stats'] })
+    },
+    onError: () => {
+      message.error('清空失败,请重试')
+    },
+  })
+
+  const handleClear = () => {
+    Modal.confirm({
+      title: '确认清空请求日志?',
+      content: '此操作将删除所有请求日志记录,且不可恢复。',
+      okText: '清空',
+      okButtonProps: { danger: true },
+      cancelText: '取消',
+      onOk: () => clearMut.mutate(),
+    })
+  }
 
   const handleSearch = () => {
     setFilters({ reason, model })
@@ -121,6 +147,15 @@ export default function Logs() {
           />
           <Button type="primary" onClick={handleSearch}>查询</Button>
           <Button onClick={handleReset}>重置</Button>
+          <Button
+            danger
+            icon={<DeleteOutlined />}
+            loading={clearMut.isPending}
+            onClick={handleClear}
+            style={{ marginLeft: 'auto' }}
+          >
+            清空日志
+          </Button>
         </Space>
       </Card>
 

@@ -40,6 +40,11 @@ func (s *Store) CreateLog(l *RequestLog) error {
 	return s.DB.Create(l).Error
 }
 
+// ClearLogs deletes all request log rows. SQLite/TRUNCATE 不兼容,用 DELETE 全表。
+func (s *Store) ClearLogs() error {
+	return s.DB.Where("1 = 1").Delete(&RequestLog{}).Error
+}
+
 func (s *Store) ListLogs(page, pageSize int, reason, model string) ([]LogWithProvider, int64, error) {
 	var logs []LogWithProvider
 	var total int64

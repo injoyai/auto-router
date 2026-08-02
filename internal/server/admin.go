@@ -370,7 +370,6 @@ func (a *App) handleGetRouting(c *gin.Context) {
 		"id":                  rc.ID,
 		"judge_group_id":      rc.JudgeGroupID,
 		"default_group_id":    rc.DefaultGroupID,
-		"judge_max_input_chars": rc.JudgeMaxInputChars,
 		"gateway_token":       a.GatewayTokenValue(),
 	})
 }
@@ -379,7 +378,6 @@ func (a *App) handleUpdateRouting(c *gin.Context) {
 	var body struct {
 		JudgeGroupID       *uint  `json:"judge_group_id"`
 		DefaultGroupID     *uint  `json:"default_group_id"`
-		JudgeMaxInputChars int    `json:"judge_max_input_chars"`
 		GatewayToken       string `json:"gateway_token"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
@@ -404,7 +402,6 @@ func (a *App) handleUpdateRouting(c *gin.Context) {
 		ID:                 1,
 		JudgeGroupID:       body.JudgeGroupID,
 		DefaultGroupID:     body.DefaultGroupID,
-		JudgeMaxInputChars: body.JudgeMaxInputChars,
 	}
 	if err := a.Store.UpdateRoutingConfig(&rc); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -420,7 +417,6 @@ func (a *App) handleUpdateRouting(c *gin.Context) {
 		"id":                  rc.ID,
 		"judge_group_id":      rc.JudgeGroupID,
 		"default_group_id":    rc.DefaultGroupID,
-		"judge_max_input_chars": rc.JudgeMaxInputChars,
 		"gateway_token":       a.GatewayTokenValue(),
 	})
 }
@@ -438,6 +434,14 @@ func (a *App) handleListLogs(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"data": logs, "total": total, "page": page, "page_size": size})
+}
+
+func (a *App) handleClearLogs(c *gin.Context) {
+	if err := a.Store.ClearLogs(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"deleted": true})
 }
 
 func (a *App) handleStats(c *gin.Context) {

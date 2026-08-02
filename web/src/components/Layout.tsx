@@ -17,7 +17,7 @@ const LOGOUT_KEY = '__logout__'
 
 const menuItems = [
   { key: '/', icon: <DashboardOutlined />, label: '仪表盘' },
-  { key: '/sources', icon: <AppstoreOutlined />, label: '模型管理' },
+  { key: '/sources', icon: <AppstoreOutlined />, label: '上游模型' },
   { key: '/queues', icon: <UnorderedListOutlined />, label: '模型队列' },
   { key: '/routing', icon: <SettingOutlined />, label: '路由配置' },
   { key: '/logs', icon: <FileTextOutlined />, label: '请求日志' },

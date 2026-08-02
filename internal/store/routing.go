@@ -4,7 +4,6 @@ type RoutingConfig struct {
 	ID                 uint  `gorm:"primaryKey" json:"id"`
 	JudgeGroupID       *uint `json:"judge_group_id"`        // 判定队列，指向 ModelGroup
 	DefaultGroupID     *uint `json:"default_group_id"`      // default fallback queue
-	JudgeMaxInputChars int   `gorm:"default:2000" json:"judge_max_input_chars"`
 }
 
 func (s *Store) GetRoutingConfig() (*RoutingConfig, error) {

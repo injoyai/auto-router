@@ -124,10 +124,10 @@ func (e *Engine) Route(req *model.ChatRequest) (*Decision, error) {
 			if err != nil || len(ch) == 0 {
 				continue
 			}
-			cands = append(cands, Candidate{Name: g.Name})
+			cands = append(cands, Candidate{Name: g.Name, Description: g.Remark})
 			known = append(known, g.Name)
 		}
-		userText := TruncateUserText(req.LastUserMessage(), rc.JudgeMaxInputChars)
+		userText := req.AllUserMessages()
 		jStart := time.Now()
 		raw, servedName, usage, jerr := e.Judge.Judge(judgeChain, cands, userText)
 		judgeLatency = time.Since(jStart)

@@ -61,6 +61,10 @@ export async function listLogs(params: ListLogsParams): Promise<ListLogsResponse
   return data
 }
 
+export async function clearLogs(): Promise<void> {
+  await apiClient.delete('/admin/logs')
+}
+
 export async function getStats(): Promise<Stats> {
   const { data } = await apiClient.get('/admin/stats')
   return data

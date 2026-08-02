@@ -4,7 +4,6 @@ export interface RoutingConfig {
   id: number
   judge_group_id: number | null
   default_group_id: number | null
-  judge_max_input_chars: number
   gateway_token: string
 }
 

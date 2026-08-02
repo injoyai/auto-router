@@ -19,7 +19,7 @@ type fakeStore struct {
 }
 
 func (f *fakeStore) GetRoutingConfig() (*store.RoutingConfig, error) {
-	return &store.RoutingConfig{JudgeGroupID: f.judgeGroup, DefaultGroupID: f.defGroup, JudgeMaxInputChars: 1000}, nil
+	return &store.RoutingConfig{JudgeGroupID: f.judgeGroup, DefaultGroupID: f.defGroup}, nil
 }
 func (f *fakeStore) ListEnabledModelGroups() ([]store.ModelGroup, error) { return f.groups, nil }
 func (f *fakeStore) GetModelGroup(id uint) (*store.ModelGroup, error) {

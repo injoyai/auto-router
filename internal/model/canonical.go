@@ -1,5 +1,7 @@
 package model
 
+import "strings"
+
 // ChatRequest is the internal canonical request (OpenAI-based).
 type ChatRequest struct {
 	Model     string
@@ -46,6 +48,19 @@ func (r *ChatRequest) LastUserMessage() string {
 		}
 	}
 	return ""
+}
+
+// AllUserMessages concatenates all user messages in chronological order,
+// separated by newlines. Used by the judge to see the full task context
+// (not just the last message, which may be a short follow-up like "继续").
+func (r *ChatRequest) AllUserMessages() string {
+	var parts []string
+	for _, m := range r.Messages {
+		if m.Role == "user" && m.Content != "" {
+			parts = append(parts, m.Content)
+		}
+	}
+	return strings.Join(parts, "\n")
 }
 
 // IsRouteRequested reports whether the client wants auto-routing (no explicit model).

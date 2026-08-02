@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Card, Form, Select, InputNumber, Button, message, Spin, Input, Space, Typography, Tooltip, Tag } from 'antd'
+import { Card, Form, Select, Button, message, Spin, Input, Space, Typography, Tooltip, Tag } from 'antd'
 import { InfoCircleOutlined, CopyOutlined, ReloadOutlined, ApiOutlined, KeyOutlined, CompassOutlined } from '@ant-design/icons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getRoutingConfig, updateRoutingConfig } from '../api/routing'
@@ -179,9 +179,6 @@ export default function Routing() {
                 extra={<Text type="secondary" style={{ fontSize: 12 }}>判定失败或目标模型不可用时，请求将回退到此队列</Text>}
               >
                 <Select allowClear placeholder="选择兜底队列" options={groupOptions} />
-              </Form.Item>
-              <Form.Item name="judge_max_input_chars" label="判定输入截断（字符）">
-                <InputNumber min={100} max={10000} style={{ width: '100%' }} />
               </Form.Item>
               <Form.Item>
                 <Button type="primary" onClick={handleSaveRouting} loading={saveMut.isPending} style={{ height: 42, paddingInline: 32 }}>保存</Button>

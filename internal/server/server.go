@@ -123,6 +123,7 @@ func NewApp(cfg Config, st *store.Store, cryptoKey []byte, gatewayToken, adminTo
 	authAdmin.GET("/groups/:id/items", app.handleListGroupItems)
 	authAdmin.PUT("/groups/:id/items", app.handleReplaceGroupItems)
 	authAdmin.GET("/logs", app.handleListLogs)
+	authAdmin.DELETE("/logs", app.handleClearLogs)
 	authAdmin.GET("/stats", app.handleStats)
 	return app
 }

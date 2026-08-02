@@ -39,12 +39,3 @@ func TestParseJudgeOutput(t *testing.T) {
 		assert.Equal(t, want, got, "input %q", in)
 	}
 }
-
-func TestTruncateUserText(t *testing.T) {
-	long := ""
-	for i := 0; i < 5000; i++ {
-		long += "x"
-	}
-	out := TruncateUserText(long, 100)
-	assert.Equal(t, 100, len(out))
-}

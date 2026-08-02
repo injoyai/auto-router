@@ -53,7 +53,7 @@ func newTestApp(t *testing.T, upstreamURL string) *testApp {
 		ID:                 1,
 		JudgeGroupID:       &judgeGrp.ID,
 		DefaultGroupID:     &grp.ID,
-		JudgeMaxInputChars: 2000,
+
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -102,7 +102,7 @@ func newTestAppWithProtocol(t *testing.T, upstreamURL, protocol string) *testApp
 		ID:                 1,
 		JudgeGroupID:       &judgeGrp.ID,
 		DefaultGroupID:     &grp.ID,
-		JudgeMaxInputChars: 2000,
+
 	}); err != nil {
 		t.Fatal(err)
 	}
