@@ -10,6 +10,7 @@ import {
   FireOutlined,
   UnorderedListOutlined,
 } from '@ant-design/icons'
+import { useEffect, useState } from 'react'
 
 const { Sider, Content } = AntLayout
 
@@ -29,6 +30,11 @@ const menuItems = [
 export default function Layout() {
   const navigate = useNavigate()
   const location = useLocation()
+  const [version, setVersion] = useState('')
+
+  useEffect(() => {
+    fetch('/version').then(r => r.json()).then(d => setVersion(d.version || '')).catch(() => {})
+  }, [])
 
   const selectedKey = location.pathname === '/' ? '/' : '/' + location.pathname.split('/').filter(Boolean)[0]
 
@@ -54,7 +60,7 @@ export default function Layout() {
           </span>
           Auto Router
         </div>
-        <div className="aurora-brand-sub">AI Gateway · v2026.07.31</div>
+        <div className="aurora-brand-sub">AI Gateway{version ? ` · ${version}` : ''}</div>
         <Menu
           mode="inline"
           theme="light"

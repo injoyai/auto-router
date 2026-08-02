@@ -9,13 +9,14 @@ RUN npm run build
 # ── Stage 2: Build backend (embeds frontend dist) ──
 FROM golang:1.25-alpine AS go-builder
 ARG GOPROXY=https://goproxy.cn,direct
+ARG VERSION=""
 ENV GOPROXY=${GOPROXY}
 WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
 COPY --from=web-builder /app/web/dist ./web/dist
-RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o auto-router ./cmd
+RUN CGO_ENABLED=0 go build -ldflags="-s -w -X auto-router/internal/version.Version=${VERSION}" -o auto-router ./cmd
 
 # ── Stage 3: Runtime ──
 FROM alpine:3.21

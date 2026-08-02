@@ -15,6 +15,7 @@ import (
 	"auto-router/internal/routing"
 	"auto-router/internal/store"
 	"auto-router/internal/upstream"
+	"auto-router/internal/version"
 )
 
 type Config = config.Config
@@ -70,6 +71,7 @@ func NewApp(cfg Config, st *store.Store, cryptoKey []byte, gatewayToken, adminTo
 	r := gin.New()
 	r.Use(gin.Logger(), gin.Recovery())
 	r.GET("/health", func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"status": "ok"}) })
+	r.GET("/version", func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"version": version.Version}) })
 
 	// Dev mode: permissive CORS so the Vite dev server can call the backend.
 	if cfg.Server.DevMode {
