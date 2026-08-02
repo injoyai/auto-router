@@ -8,8 +8,7 @@ server:
 db:
   driver: sqlite                # sqlite (默认) 或 mysql
   path: "./data/database/auto-router.db"  # SQLite 文件路径（仅 sqlite 驱动使用）
-  dsn: "root:123456@tcp(192.168.192.5:3306)/auto_router?charset=utf8mb4&parseTime=True&loc=Local" # MySQL 连接串（仅 mysql 驱动使用，需含 parseTime=true）
-
+  
 auth:
   password: "admin"             # 管理后台登录密码（留空则首次启动自动生成）
   # gateway_token: ""           # 客户端访问网关的 token（留空则首次启动自动生成）
