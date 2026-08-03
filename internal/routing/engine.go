@@ -37,10 +37,9 @@ type Decision struct {
 	ModelName     string         // target name (queue name), used for RoutedModel
 	Model         *store.Model   // first model in chain (back-compat)
 	Models        []*store.Model // ordered chain
-	Reason        string         // override | judge | fallback
+	Reason        string         // override | judge
 	ServedModel   string         // filled by gateway on success
 	FailoverCount int            // filled by gateway
-	Trace         []store.Attempt // filled by gateway: model queue attempts
 	JudgeTrace    []store.Attempt // filled by engine: judge attempts
 	JudgeRaw      string
 	JudgeModel    string
@@ -156,7 +155,7 @@ func (e *Engine) Route(req *model.ChatRequest) (*Decision, error) {
 		}
 	}
 
-	// 3. Fallback: default group
+	// 3. Fallback: default group (judge failed or no judge configured)
 	if rc.DefaultGroupID != nil {
 		if g, err := e.Store.GetModelGroup(*rc.DefaultGroupID); err == nil && g != nil && g.Enabled {
 			if chain, err := e.Store.GetGroupChain(g.ID); err == nil && len(chain) > 0 {

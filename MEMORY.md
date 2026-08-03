@@ -64,6 +64,8 @@ web/
 - `ServedModel`: 实际执行的模型名; `RoutedModel`: 路由目标(队列名)
 - Token 字段: `PromptTokens`/`CompletionTokens`/`TotalTokens`/`CacheTokens`（缓存命中）；判定调用另有 `JudgePromptTokens`/`JudgeCompletionTokens`/`JudgeTotalTokens`/`JudgeCacheTokens`
 - `CacheTokens` 来源: Claude `cache_read_input_tokens`，OpenAI `prompt_tokens_details.cached_tokens`
+- `Trace`: JSON 数组，存储完整请求链路（`[]Attempt`），包含判定尝试和执行模型尝试，每次重试独立一条
+- `Attempt` 结构体: `Type`("judge"/"")、`Model`、`Provider`、`Success`、`Status`(HTTP状态码)、`Error`、`LatencyMs`
 - `LogWithProvider` 结构体用于 ListLogs JOIN 查询返回服务商名
 - Token 统计通过子查询关联 models+providers 解析服务商
 
