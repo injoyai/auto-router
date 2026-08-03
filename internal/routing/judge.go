@@ -57,7 +57,7 @@ const judgeSystemPrompt = `你是一个模型路由器。根据用户当前这�
 
 回复格式(共三行,不要输出额外内容):
 - 第一行:队列名称(必须与列表中的某个名称完全一致)
-- 第二行:[阶段] 一句话说明当前这一步属于什么阶段
+- 第二行:[任务] 一句话说明当前这一步属于任务什么阶段
 - 第三行:[理由] 一句话说明为什么选这个队列`
 
 // BuildJudgeMessages constructs the messages to send to the judge model.

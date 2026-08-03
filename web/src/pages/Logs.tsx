@@ -90,12 +90,11 @@ export default function Logs() {
       render: (v: string) => v ? new Date(v).toLocaleString('zh-CN') : '-',
     },
     { title: '请求模型', dataIndex: 'requested_model', key: 'requested_model', width: 120 },
-    { title: '服务商', dataIndex: 'provider_name', key: 'provider_name', width: 100, render: (v: string) => v || '-' },
-    { title: '路由模型', dataIndex: 'routed_model', key: 'routed_model', width: 120 },
     {
       title: '路由类型', dataIndex: 'route_reason', key: 'route_reason', width: 100,
       render: (v: string) => <Tag color={reasonColors[v] ?? 'default'}>{reasonLabels[v] ?? v}</Tag>,
     },
+    { title: '模型队列', dataIndex: 'routed_model', key: 'routed_model', width: 120 },
     {
       title: '状态', dataIndex: 'status', key: 'status', width: 70,
       render: (v: number) => <span style={{ color: v < 400 ? '#10b981' : '#f43f5e', fontWeight: 600 }}>{v}</span>,
@@ -168,10 +167,10 @@ export default function Logs() {
         dataSource={data?.data}
         rowKey="id"
         loading={isLoading}
-        scroll={{ x: 1320 }}
+        scroll={{ x: 1220 }}
         expandable={{
           expandedRowRender: (r: RequestLog) => {
-            const hasJudge = !!r.judge_model
+            const hasJudge = !!r.judge_model || r.judge_latency_ms > 0
             const hasRaw = !!r.judge_raw
             let attempts: Attempt[] = []
             try { attempts = JSON.parse(r.trace) || [] } catch { /* empty trace */ }
@@ -180,25 +179,9 @@ export default function Logs() {
             }
             return (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                {attempts.length > 0 && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    <strong style={{ color: '#4e4636', fontSize: 13 }}>模型尝试链路</strong>
-                    {attempts.map((a, idx) => (
-                      <div key={idx} style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center', fontSize: 13, color: '#6a604c', paddingLeft: 8 }}>
-                        <Tag color={a.success ? 'green' : 'red'} style={{ margin: 0 }}>
-                          {a.success ? '成功' : '失败'}
-                        </Tag>
-                        <span>{a.model}{a.provider ? ` (${a.provider})` : ''}</span>
-                        {a.retries > 0 && <span>重试 {a.retries} 次</span>}
-                        <span>{formatLatency(a.latency_ms)}</span>
-                        {a.error && <span style={{ color: '#f43f5e' }}>{a.error}</span>}
-                      </div>
-                    ))}
-                  </div>
-                )}
                 {hasJudge && (
                   <div style={{ display: 'flex', gap: 28, flexWrap: 'wrap', fontSize: 13, color: '#6a604c' }}>
-                    <span><strong style={{ color: '#4e4636' }}>判定模型:</strong> {r.judge_model}</span>
+                    <span><strong style={{ color: '#4e4636' }}>判定模型:</strong> {r.judge_model || <Tag color="red" style={{ margin: 0 }}>失败</Tag>}</span>
                     <span><strong style={{ color: '#4e4636' }}>判定耗时:</strong> {formatLatency(r.judge_latency_ms)}</span>
                     <span>
                       <strong style={{ color: '#4e4636' }}>判定 Token:</strong>
@@ -210,6 +193,29 @@ export default function Logs() {
                   <pre style={{ whiteSpace: 'pre-wrap', fontFamily: "'JetBrains Mono', monospace", fontSize: 13, background: '#f8f9fc', padding: 16, borderRadius: 12, border: '1px solid #f1f2f8', margin: 0 }}>
                     {r.judge_raw}
                   </pre>
+                )}
+                {attempts.length > 0 && (
+                  <Table
+                    size="small"
+                    pagination={false}
+                    rowKey={(_, idx) => String(idx)}
+                    dataSource={attempts}
+                    columns={[
+                      { title: '类型', dataIndex: 'type', key: 'type', width: 70,
+                        render: (v: string) => v === 'judge' ? <Tag color="purple" style={{ margin: 0 }}>判定</Tag> : <Tag color="blue" style={{ margin: 0 }}>执行</Tag> },
+                      { title: '状态', dataIndex: 'success', key: 'success', width: 70,
+                        render: (v: boolean) => <Tag color={v ? 'green' : 'red'} style={{ margin: 0 }}>{v ? '成功' : '失败'}</Tag> },
+                      { title: '服务商', dataIndex: 'provider', key: 'provider', width: 120,
+                        render: (v: string) => v || '-' },
+                      { title: '模型', dataIndex: 'model', key: 'model', width: 180 },
+                      { title: '状态码', dataIndex: 'status', key: 'status', width: 80,
+                        render: (v: number) => v > 0 ? <span style={{ color: v < 400 ? '#10b981' : '#f43f5e', fontWeight: 600 }}>{v}</span> : '-' },
+                      { title: '耗时', dataIndex: 'latency_ms', key: 'latency_ms', width: 80,
+                        render: (v: number) => formatLatency(v) },
+                      { title: '错误', dataIndex: 'error', key: 'error', ellipsis: true,
+                        render: (v: string) => v ? <span style={{ color: '#f43f5e' }}>{v}</span> : '-' },
+                    ]}
+                  />
                 )}
               </div>
             )

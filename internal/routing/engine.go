@@ -27,9 +27,10 @@ var _ StoreDeps = (*store.Store)(nil)
 //   - servedModel: the name of the judge model that actually succeeded
 //                  (after failover within the chain)
 //   - usage:     token usage of the successful judge call (nil on failure)
+//   - trace:     per-model attempt history of the judge chain
 //   - err:       non-nil when the whole judge chain is exhausted
 type JudgeClient interface {
-	Judge(chain []*store.Model, candidates []Candidate, userText string) (raw string, servedModel string, usage *model.Usage, err error)
+	Judge(chain []*store.Model, candidates []Candidate, userText string) (raw string, servedModel string, usage *model.Usage, trace []store.Attempt, err error)
 }
 
 type Decision struct {
@@ -39,6 +40,8 @@ type Decision struct {
 	Reason        string         // override | judge | fallback
 	ServedModel   string         // filled by gateway on success
 	FailoverCount int            // filled by gateway
+	Trace         []store.Attempt // filled by gateway: model queue attempts
+	JudgeTrace    []store.Attempt // filled by engine: judge attempts
 	JudgeRaw      string
 	JudgeModel    string
 	JudgeUsage    *model.Usage
@@ -102,6 +105,7 @@ func (e *Engine) Route(req *model.ChatRequest) (*Decision, error) {
 	judgeRaw := ""
 	var judgeUsage *model.Usage
 	var judgeLatency time.Duration
+	var judgeTrace []store.Attempt
 
 	var judgeChain []*store.Model
 	if rc.JudgeGroupID != nil {
@@ -129,10 +133,11 @@ func (e *Engine) Route(req *model.ChatRequest) (*Decision, error) {
 		}
 		userText := req.AllUserMessages()
 		jStart := time.Now()
-		raw, servedName, usage, jerr := e.Judge.Judge(judgeChain, cands, userText)
+		raw, servedName, usage, jTrace, jerr := e.Judge.Judge(judgeChain, cands, userText)
 		judgeLatency = time.Since(jStart)
 		judgeUsage = usage
 		judgeName = servedName
+		judgeTrace = jTrace
 		switch {
 		case jerr != nil:
 			log.Printf("[WARN] judge call failed: %v", jerr)
@@ -143,7 +148,7 @@ func (e *Engine) Route(req *model.ChatRequest) (*Decision, error) {
 		default:
 			if picked := ParseJudgeOutput(raw, known); picked != "" {
 				if chain, err := e.resolveGroupChain(picked); err == nil {
-					return &Decision{ModelName: picked, Model: chain[0], Models: chain, Reason: "judge", JudgeRaw: raw, JudgeModel: servedName, JudgeUsage: judgeUsage, JudgeLatency: judgeLatency}, nil
+					return &Decision{ModelName: picked, Model: chain[0], Models: chain, Reason: "judge", JudgeRaw: raw, JudgeModel: servedName, JudgeUsage: judgeUsage, JudgeLatency: judgeLatency, JudgeTrace: judgeTrace}, nil
 				}
 			}
 			log.Printf("[WARN] judge output unparseable: %q", raw)
@@ -156,7 +161,7 @@ func (e *Engine) Route(req *model.ChatRequest) (*Decision, error) {
 		if g, err := e.Store.GetModelGroup(*rc.DefaultGroupID); err == nil && g != nil && g.Enabled {
 			if chain, err := e.Store.GetGroupChain(g.ID); err == nil && len(chain) > 0 {
 				out := toPtrChain(chain)
-				return &Decision{ModelName: g.Name, Model: out[0], Models: out, Reason: "fallback", JudgeRaw: judgeRaw, JudgeModel: judgeName, JudgeUsage: judgeUsage, JudgeLatency: judgeLatency}, nil
+				return &Decision{ModelName: g.Name, Model: out[0], Models: out, Reason: "fallback", JudgeRaw: judgeRaw, JudgeModel: judgeName, JudgeUsage: judgeUsage, JudgeLatency: judgeLatency, JudgeTrace: judgeTrace}, nil
 			}
 		}
 	}

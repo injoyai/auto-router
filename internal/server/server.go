@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -144,27 +145,39 @@ var _ routing.JudgeClient = (*lazyJudge)(nil)
 
 // Judge 遍历判定队列链，逐模型解析 provider 并调用；首个成功（err==nil 且 raw != ""）
 // 即返回。全部失败时返回 "judge queue exhausted" 错误，引擎据此走兜底。
-func (l *lazyJudge) Judge(chain []*store.Model, candidates []routing.Candidate, userText string) (string, string, *model.Usage, error) {
+func (l *lazyJudge) Judge(chain []*store.Model, candidates []routing.Candidate, userText string) (string, string, *model.Usage, []store.Attempt, error) {
 	var lastErr error
+	var trace []store.Attempt
 	for _, jm := range chain {
 		prov, err := l.st.GetProvider(jm.ProviderID)
 		if err != nil {
 			lastErr = err
+			trace = append(trace, store.Attempt{Type: "judge", Model: jm.Name, Error: err.Error()})
 			continue
 		}
 		apiKey, _ := store.Decrypt(l.key, prov.APIKey)
+		jStart := time.Now()
 		raw, usage, err := routing.NewJudgeClient(l.disp, prov.BaseURL, apiKey, prov.Protocol, prov.ProxyURL).Judge(jm, candidates, userText)
+		jLatency := time.Since(jStart).Milliseconds()
 		if err == nil && raw != "" {
-			return raw, jm.Name, usage, nil
+			trace = append(trace, store.Attempt{Type: "judge", Model: jm.Name, Provider: prov.Name, Success: true, Status: 200, LatencyMs: jLatency})
+			return raw, jm.Name, usage, trace, nil
 		}
+		errMsg := ""
+		status := 0
 		if err != nil {
+			errMsg = err.Error()
+			status = upstream.ErrorStatus(err)
 			lastErr = err
+		} else {
+			errMsg = "empty output"
 		}
+		trace = append(trace, store.Attempt{Type: "judge", Model: jm.Name, Provider: prov.Name, Error: errMsg, Status: status, LatencyMs: jLatency})
 	}
 	if lastErr == nil {
-		return "", "", nil, fmt.Errorf("judge queue exhausted")
+		return "", "", nil, trace, fmt.Errorf("judge queue exhausted")
 	}
-	return "", "", nil, fmt.Errorf("judge queue exhausted: %w", lastErr)
+	return "", "", nil, trace, fmt.Errorf("judge queue exhausted: %w", lastErr)
 }
 
 // ServeSPA registers a NoRoute handler to serve the embedded React SPA.

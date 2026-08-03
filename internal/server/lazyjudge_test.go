@@ -70,7 +70,7 @@ func TestLazyJudgeFailover(t *testing.T) {
 	st, key, chain := newLazyJudgeTestStore(t, failSrv.URL, okSrv.URL)
 	lj := &lazyJudge{st: st, disp: upstream.New(), key: key}
 
-	raw, servedModel, usage, err := lj.Judge(chain, []routing.Candidate{{Name: "deepseek-v4-flash"}}, "hi")
+	raw, servedModel, usage, _, err := lj.Judge(chain, []routing.Candidate{{Name: "deepseek-v4-flash"}}, "hi")
 	assert.NoError(t, err)
 	assert.Equal(t, "deepseek-v4-flash", raw)
 	assert.Equal(t, "judge-ok", servedModel)
@@ -87,7 +87,7 @@ func TestLazyJudgeAllFail(t *testing.T) {
 	st, key, chain := newLazyJudgeTestStore(t, failSrv1.URL, failSrv2.URL)
 	lj := &lazyJudge{st: st, disp: upstream.New(), key: key}
 
-	raw, servedModel, usage, err := lj.Judge(chain, []routing.Candidate{{Name: "deepseek-v4-flash"}}, "hi")
+	raw, servedModel, usage, _, err := lj.Judge(chain, []routing.Candidate{{Name: "deepseek-v4-flash"}}, "hi")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "judge queue exhausted")
 	assert.Empty(t, raw)

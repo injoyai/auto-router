@@ -149,7 +149,7 @@ func TestCallWithRetrySuccess(t *testing.T) {
 
 	d := New()
 	// Use very short backoff for test speed
-	resp, retries, err := d.CallWithRetry(context.Background(), srv.URL, "sk-test", "openai", "", map[string]any{"model": "gpt-4", "messages": []map[string]any{{"role": "user", "content": "x"}}}, 3, 10)
+	resp, retries, err := d.CallWithRetry(context.Background(), srv.URL, "sk-test", "openai", "", map[string]any{"model": "gpt-4", "messages": []map[string]any{{"role": "user", "content": "x"}}}, 3, 10, nil)
 	assert.NoError(t, err)
 	assert.Equal(t, "hi", resp.Choices[0].Message.Content)
 	assert.Equal(t, 2, retries)
@@ -166,7 +166,7 @@ func TestCallWithRetryNonRetryable(t *testing.T) {
 	defer srv.Close()
 
 	d := New()
-	resp, retries, err := d.CallWithRetry(context.Background(), srv.URL, "sk-bad", "openai", "", map[string]any{"model": "gpt-4", "messages": []map[string]any{{"role": "user", "content": "x"}}}, 3, 10)
+	resp, retries, err := d.CallWithRetry(context.Background(), srv.URL, "sk-bad", "openai", "", map[string]any{"model": "gpt-4", "messages": []map[string]any{{"role": "user", "content": "x"}}}, 3, 10, nil)
 	assert.Error(t, err)
 	assert.Nil(t, resp)
 	assert.Equal(t, 0, retries) // 401 is not retryable, so 0 retries
@@ -198,7 +198,7 @@ func TestCallStreamWithRetryPreFirstByte(t *testing.T) {
 			contents = append(contents, ch.Choices[0].Delta.Content)
 		}
 		return nil
-	})
+	}, nil)
 	assert.NoError(t, err)
 	assert.Equal(t, 1, retries)
 	assert.Equal(t, 2, calls)
@@ -233,7 +233,7 @@ func TestCallStreamWithRetryNoRetryAfterOutput(t *testing.T) {
 			contents = append(contents, ch.Choices[0].Delta.Content)
 		}
 		return nil
-	})
+	}, nil)
 	// The first call sends a chunk then ends normally (scanner finishes, onChunk(nil) called, returns nil)
 	// So err should be nil, retries 0, only "hi" received, calls 1
 	assert.NoError(t, err)

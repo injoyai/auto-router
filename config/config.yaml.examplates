@@ -1,0 +1,15 @@
+# Auto Router 配置文件
+# 优先级：环境变量 > 配置文件 > 默认值
+
+server:
+  listen_addr: ":9090"          # 监听地址
+  dev: false                    # 开发模式（放开 CORS）
+
+db:
+  driver: sqlite                # sqlite (默认) 或 mysql
+  path: "./data/database/auto-router.db"  # SQLite 文件路径（仅 sqlite 驱动使用）
+  dsn: "root:123456@tcp(127.0.0.1:3306)/auto-router?charset=utf8mb4&parseTime=True&loc=Local"  # MySQL 数据库连接字符串（仅 mysql 驱动使用）
+
+auth:
+  password: "admin"             # 管理后台登录密码（留空则首次启动自动生成）
+

@@ -1,11 +1,12 @@
 import apiClient from './client'
 
 export interface Attempt {
+  type?: string
   model: string
   provider: string
   success: boolean
+  status: number
   error?: string
-  retries: number
   latency_ms: number
 }
 

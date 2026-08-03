@@ -102,16 +102,20 @@ func (a *App) handleChat(c *gin.Context, clientFmt string, parseInbound func(map
 		} else {
 			body, _ = openai.BuildUpstreamRequest(req)
 		}
-		attemptStart := time.Now()
-		resp, retryCount, err = a.Dispatcher.CallWithRetry(c.Request.Context(), prov.BaseURL, apiKey, prov.Protocol, prov.ProxyURL, body, prov.RetryMax, prov.RetryBackoffMs)
-		attemptLatency := time.Since(attemptStart).Milliseconds()
+		modelName := m.Name
+		provName := prov.Name
+		resp, retryCount, err = a.Dispatcher.CallWithRetry(c.Request.Context(), prov.BaseURL, apiKey, prov.Protocol, prov.ProxyURL, body, prov.RetryMax, prov.RetryBackoffMs, func(success bool, httpStatus int, e error, latencyMs int64) {
+			a := store.Attempt{Model: modelName, Provider: provName, Success: success, Status: httpStatus, LatencyMs: latencyMs}
+			if e != nil {
+				a.Error = e.Error()
+			}
+			attempts = append(attempts, a)
+		})
 		if err == nil {
 			dec.FailoverCount = i
-			attempts = append(attempts, store.Attempt{Model: m.Name, Provider: prov.Name, Success: true, Retries: retryCount, LatencyMs: attemptLatency})
 			break
 		}
 		lastErr = err
-		attempts = append(attempts, store.Attempt{Model: m.Name, Provider: prov.Name, Error: err.Error(), Retries: retryCount, LatencyMs: attemptLatency})
 	}
 	if resp == nil && lastErr != nil {
 		status = http.StatusBadGateway
@@ -130,7 +134,8 @@ func (a *App) handleChat(c *gin.Context, clientFmt string, parseInbound func(map
 	if resp != nil {
 		usage = &resp.Usage
 	}
-	traceBytes, _ := json.Marshal(attempts)
+	allAttempts := append(dec.JudgeTrace, attempts...)
+	traceBytes, _ := json.Marshal(allAttempts)
 	a.writeLog(req, dec, requestedModel, status, time.Since(start), errMsg, retryCount, usage, string(traceBytes))
 }
 
@@ -178,7 +183,8 @@ func (a *App) streamResponse(c *gin.Context, dec *routing.Decision, req *model.C
 			enc = openaiChunkEncoder{}
 		}
 		started := false
-		attemptStart := time.Now()
+		modelName := m.Name
+		provName := prov.Name
 		rc, streamErr := a.Dispatcher.CallStreamWithRetry(prov.BaseURL, apiKey, prov.Protocol, prov.ProxyURL, body, prov.RetryMax, prov.RetryBackoffMs, func(ch *model.Chunk) error {
 			started = true
 			if ch != nil && ch.Usage != nil {
@@ -192,17 +198,20 @@ func (a *App) streamResponse(c *gin.Context, dec *routing.Decision, req *model.C
 			c.Writer.Write(enc.EncodeChunk(ch))
 			flusher.Flush()
 			return nil
+		}, func(success bool, httpStatus int, e error, latencyMs int64) {
+			a := store.Attempt{Model: modelName, Provider: provName, Success: success, Status: httpStatus, LatencyMs: latencyMs}
+			if e != nil {
+				a.Error = e.Error()
+			}
+			attempts = append(attempts, a)
 		})
 		retryCount = rc
-		attemptLatency := time.Since(attemptStart).Milliseconds()
 		if streamErr == nil {
 			dec.FailoverCount = i
 			succeeded = true
-			attempts = append(attempts, store.Attempt{Model: m.Name, Provider: prov.Name, Success: true, Retries: retryCount, LatencyMs: attemptLatency})
 			break
 		}
 		lastErr = streamErr
-		attempts = append(attempts, store.Attempt{Model: m.Name, Provider: prov.Name, Error: streamErr.Error(), Retries: retryCount, LatencyMs: attemptLatency})
 		if started {
 			// Output already started; cannot fail over without duplicating content.
 			break
@@ -214,7 +223,8 @@ func (a *App) streamResponse(c *gin.Context, dec *routing.Decision, req *model.C
 		errMsg = lastErr.Error()
 		writeGatewayError(c, status, req.ClientFmt, lastErr.Error(), "upstream_error")
 	}
-	traceBytes, _ := json.Marshal(attempts)
+	allAttempts := append(dec.JudgeTrace, attempts...)
+	traceBytes, _ := json.Marshal(allAttempts)
 	a.writeLog(req, dec, requestedModel, status, time.Since(start), errMsg, retryCount, usage, string(traceBytes))
 }
 

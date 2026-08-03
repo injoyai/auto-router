@@ -43,12 +43,12 @@ type fakeJudge struct {
 	err error
 }
 
-func (fj *fakeJudge) Judge(chain []*store.Model, candidates []Candidate, userText string) (string, string, *model.Usage, error) {
+func (fj *fakeJudge) Judge(chain []*store.Model, candidates []Candidate, userText string) (string, string, *model.Usage, []store.Attempt, error) {
 	served := ""
 	if len(chain) > 0 {
 		served = chain[0].Name
 	}
-	return fj.out, served, nil, fj.err
+	return fj.out, served, nil, nil, fj.err
 }
 
 func puint(v uint) *uint { return &v }

@@ -4,11 +4,12 @@ import "time"
 
 // Attempt records one model attempt in the execution chain.
 type Attempt struct {
+	Type      string `json:"type,omitempty"` // "judge" for judge attempts, "" for model queue
 	Model     string `json:"model"`
 	Provider  string `json:"provider"`
 	Success   bool   `json:"success"`
+	Status    int    `json:"status"` // HTTP status code (0 = network error)
 	Error     string `json:"error,omitempty"`
-	Retries   int    `json:"retries"`
 	LatencyMs int64  `json:"latency_ms"`
 }
 

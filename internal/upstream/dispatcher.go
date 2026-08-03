@@ -119,9 +119,24 @@ func (d *Dispatcher) callOnce(ctx context.Context, baseURL, apiKey, protocol, pr
 	return parseUpstreamResponse(m, protocol)
 }
 
+// AttemptFunc is called after each individual upstream attempt (including retries).
+// success: whether this attempt succeeded; status: HTTP status (0 = network error);
+// err: nil on success; latencyMs: time spent on this attempt.
+type AttemptFunc func(success bool, status int, err error, latencyMs int64)
+
+// ErrorStatus extracts the HTTP status code from an upstreamError, returns 0 for network errors.
+func ErrorStatus(err error) int {
+	var ue *upstreamError
+	if errors.As(err, &ue) {
+		return ue.Status
+	}
+	return 0
+}
+
 // CallWithRetry calls callOnce with retry logic. Returns the response,
 // the number of retries performed, and the last error.
-func (d *Dispatcher) CallWithRetry(ctx context.Context, baseURL, apiKey, protocol, proxyURL string, body map[string]any, retryMax, backoffMs int) (*model.ChatResponse, int, error) {
+// onAttempt (if non-nil) is called after each individual attempt.
+func (d *Dispatcher) CallWithRetry(ctx context.Context, baseURL, apiKey, protocol, proxyURL string, body map[string]any, retryMax, backoffMs int, onAttempt AttemptFunc) (*model.ChatResponse, int, error) {
 	var lastErr error
 	retries := 0
 	for attempt := 0; attempt <= retryMax; attempt++ {
@@ -129,7 +144,16 @@ func (d *Dispatcher) CallWithRetry(ctx context.Context, baseURL, apiKey, protoco
 			time.Sleep(time.Duration(backoffMs*(1<<(attempt-1))) * time.Millisecond)
 			retries++
 		}
+		attemptStart := time.Now()
 		resp, err := d.callOnce(ctx, baseURL, apiKey, protocol, proxyURL, body)
+		attemptLatency := time.Since(attemptStart).Milliseconds()
+		if onAttempt != nil {
+			status := 200
+			if err != nil {
+				status = ErrorStatus(err)
+			}
+			onAttempt(err == nil, status, err, attemptLatency)
+		}
 		if err == nil {
 			return resp, retries, nil
 		}
@@ -222,7 +246,8 @@ func (d *Dispatcher) callStreamOnce(baseURL, apiKey, protocol, proxyURL string, 
 // Retries only BEFORE the first chunk is sent (pre-first-byte). Once output
 // has started, errors are returned immediately to avoid duplicate content.
 // Returns the number of retries performed and the last error.
-func (d *Dispatcher) CallStreamWithRetry(baseURL, apiKey, protocol, proxyURL string, body map[string]any, retryMax, backoffMs int, onChunk func(StreamChunk) error) (int, error) {
+// onAttempt (if non-nil) is called after each individual attempt.
+func (d *Dispatcher) CallStreamWithRetry(baseURL, apiKey, protocol, proxyURL string, body map[string]any, retryMax, backoffMs int, onChunk func(StreamChunk) error, onAttempt AttemptFunc) (int, error) {
 	var lastErr error
 	retries := 0
 	for attempt := 0; attempt <= retryMax; attempt++ {
@@ -231,10 +256,19 @@ func (d *Dispatcher) CallStreamWithRetry(baseURL, apiKey, protocol, proxyURL str
 			retries++
 		}
 		started := false
+		attemptStart := time.Now()
 		err := d.callStreamOnce(baseURL, apiKey, protocol, proxyURL, body, func(ch StreamChunk) error {
 			started = true
 			return onChunk(ch)
 		})
+		attemptLatency := time.Since(attemptStart).Milliseconds()
+		if onAttempt != nil {
+			status := 200
+			if err != nil {
+				status = ErrorStatus(err)
+			}
+			onAttempt(err == nil, status, err, attemptLatency)
+		}
 		if err == nil {
 			return retries, nil
 		}
