@@ -100,7 +100,7 @@ func TestRouteFallbackOnBadJudge(t *testing.T) {
 	dec, err := e.Route(&model.ChatRequest{Messages: []model.Message{{Role: "user", Content: "hi"}}})
 	assert.NoError(t, err)
 	assert.Equal(t, "deepseek-v4-flash", dec.ModelName)
-	assert.Equal(t, "fallback", dec.Reason)
+	assert.Equal(t, "judge", dec.Reason)
 }
 
 func TestRouteOverrideMultiModelChainOrder(t *testing.T) {
