@@ -62,6 +62,8 @@ web/
 
 ### RequestLog
 - `ServedModel`: 实际执行的模型名; `RoutedModel`: 路由目标(队列名)
+- Token 字段: `PromptTokens`/`CompletionTokens`/`TotalTokens`/`CacheTokens`（缓存命中）；判定调用另有 `JudgePromptTokens`/`JudgeCompletionTokens`/`JudgeTotalTokens`/`JudgeCacheTokens`
+- `CacheTokens` 来源: Claude `cache_read_input_tokens`，OpenAI `prompt_tokens_details.cached_tokens`
 - `LogWithProvider` 结构体用于 ListLogs JOIN 查询返回服务商名
 - Token 统计通过子查询关联 models+providers 解析服务商
 
@@ -130,7 +132,8 @@ web/
 - **退出登录按钮**: 位于侧边栏底部，与分隔线之间 6px 间距；分隔线为渐变样式(两端淡中间实)
 - **Token 数量显示**: 自动切换单位 (<1K 显示原值, 1K~1M 显示 x.xk, 1M~1B 显示 x.xM, ≥1B 显示 x.xB)，覆盖 Dashboard 统计卡片、饼图、Token 统计页
 - **Queues.tsx 表单提示**: 名称和能力说明的提示文本通过 `Form.Item` 的 `extra` 属性显示(灰色 12px)，不使用 tooltip
-- **Logs.tsx 列顺序**: 请求模型 → 服务商 → 路由模型；工具栏右侧有「清空日志」按钮(danger 风格，带确认弹窗)
+- **Logs.tsx 列顺序**: 请求模型 -> 服务商 -> 路由模型；工具栏右侧有「清空日志」按钮(danger 风格，带确认弹窗)
+- **Logs.tsx 展开行 Token 显示**: 使用「输入/输出/缓存命中」格式（原「提示/补全/合计」已替换）；主请求和判定调用各显示一组；所有行均可展开
 
 ## 构建命令
 

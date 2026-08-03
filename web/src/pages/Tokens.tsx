@@ -1,5 +1,5 @@
 import { Card, Col, Row, Statistic, Spin, Table } from 'antd'
-import { FireOutlined, ThunderboltOutlined, CheckCircleOutlined } from '@ant-design/icons'
+import { FireOutlined, ThunderboltOutlined, CheckCircleOutlined, DatabaseOutlined } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
 import { getStats } from '../api/logs'
 import type { TokenStatRow } from '../api/logs'
@@ -24,6 +24,7 @@ export default function Tokens() {
   const tokensTotal = stats?.tokens?.total ?? 0
   const tokensPrompt = stats?.tokens?.prompt ?? 0
   const tokensCompletion = stats?.tokens?.completion ?? 0
+  const tokensCache = stats?.tokens?.cache ?? 0
 
   const modelRows = stats?.by_model ?? []
   const providerRows = stats?.by_provider ?? []
@@ -35,9 +36,11 @@ export default function Tokens() {
     { title: '请求数', dataIndex: 'count', key: 'count', width: 100 },
     { title: '总Token', dataIndex: 'total_tokens', key: 'total_tokens', width: 120,
       render: (v: number) => v.toLocaleString() },
-    { title: '提示', dataIndex: 'prompt_tokens', key: 'prompt_tokens', width: 120,
+    { title: '输入', dataIndex: 'prompt_tokens', key: 'prompt_tokens', width: 120,
       render: (v: number) => v.toLocaleString() },
-    { title: '补全', dataIndex: 'completion_tokens', key: 'completion_tokens', width: 120,
+    { title: '输出', dataIndex: 'completion_tokens', key: 'completion_tokens', width: 120,
+      render: (v: number) => v.toLocaleString() },
+    { title: '缓存命中', dataIndex: 'cache_tokens', key: 'cache_tokens', width: 120,
       render: (v: number) => v.toLocaleString() },
     { title: '占比', key: 'percent', width: 80,
       render: (_: unknown, r: TokenStatRow) => tokensTotal > 0
@@ -50,9 +53,11 @@ export default function Tokens() {
     { title: '请求数', dataIndex: 'count', key: 'count', width: 100 },
     { title: '总Token', dataIndex: 'total_tokens', key: 'total_tokens', width: 120,
       render: (v: number) => v.toLocaleString() },
-    { title: '提示', dataIndex: 'prompt_tokens', key: 'prompt_tokens', width: 120,
+    { title: '输入', dataIndex: 'prompt_tokens', key: 'prompt_tokens', width: 120,
       render: (v: number) => v.toLocaleString() },
-    { title: '补全', dataIndex: 'completion_tokens', key: 'completion_tokens', width: 120,
+    { title: '输出', dataIndex: 'completion_tokens', key: 'completion_tokens', width: 120,
+      render: (v: number) => v.toLocaleString() },
+    { title: '缓存命中', dataIndex: 'cache_tokens', key: 'cache_tokens', width: 120,
       render: (v: number) => v.toLocaleString() },
     { title: '占比', key: 'percent', width: 80,
       render: (_: unknown, r: TokenStatRow) => tokensTotal > 0
@@ -66,22 +71,28 @@ export default function Tokens() {
       <div className="page-subtitle">按模型和服务商维度查看 Token 消耗</div>
 
       <Row gutter={[20, 20]} style={{ marginBottom: 20 }}>
-        <Col span={8}>
+        <Col span={6}>
           <Card className="stat-card stat-card--indigo">
             <div className="stat-card-icon"><FireOutlined /></div>
             <Statistic title="总消耗" value={formatTokens(tokensTotal)} />
           </Card>
         </Col>
-        <Col span={8}>
+        <Col span={6}>
           <Card className="stat-card stat-card--mint">
             <div className="stat-card-icon"><ThunderboltOutlined /></div>
-            <Statistic title="提示" value={formatTokens(tokensPrompt)} />
+            <Statistic title="输入" value={formatTokens(tokensPrompt)} />
           </Card>
         </Col>
-        <Col span={8}>
+        <Col span={6}>
           <Card className="stat-card stat-card--violet">
             <div className="stat-card-icon"><CheckCircleOutlined /></div>
-            <Statistic title="补全" value={formatTokens(tokensCompletion)} />
+            <Statistic title="输出" value={formatTokens(tokensCompletion)} />
+          </Card>
+        </Col>
+        <Col span={6}>
+          <Card className="stat-card stat-card--amber">
+            <div className="stat-card-icon"><DatabaseOutlined /></div>
+            <Statistic title="缓存命中" value={formatTokens(tokensCache)} />
           </Card>
         </Col>
       </Row>

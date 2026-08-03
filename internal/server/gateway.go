@@ -1,6 +1,7 @@
 package server
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"time"
@@ -84,11 +85,13 @@ func (a *App) handleChat(c *gin.Context, clientFmt string, parseInbound func(map
 	var resp *model.ChatResponse
 	var retryCount int
 	var lastErr error
+	var attempts []store.Attempt
 	for i, m := range dec.Models {
 		dec.ServedModel = m.Name
 		prov, perr := a.Store.GetProvider(m.ProviderID)
 		if perr != nil {
 			lastErr = fmt.Errorf("provider not found for model %s", m.Name)
+			attempts = append(attempts, store.Attempt{Model: m.Name, Error: lastErr.Error()})
 			continue
 		}
 		apiKey, _ := store.Decrypt(a.CryptoKey, prov.APIKey)
@@ -99,12 +102,16 @@ func (a *App) handleChat(c *gin.Context, clientFmt string, parseInbound func(map
 		} else {
 			body, _ = openai.BuildUpstreamRequest(req)
 		}
+		attemptStart := time.Now()
 		resp, retryCount, err = a.Dispatcher.CallWithRetry(c.Request.Context(), prov.BaseURL, apiKey, prov.Protocol, prov.ProxyURL, body, prov.RetryMax, prov.RetryBackoffMs)
+		attemptLatency := time.Since(attemptStart).Milliseconds()
 		if err == nil {
 			dec.FailoverCount = i
+			attempts = append(attempts, store.Attempt{Model: m.Name, Provider: prov.Name, Success: true, Retries: retryCount, LatencyMs: attemptLatency})
 			break
 		}
 		lastErr = err
+		attempts = append(attempts, store.Attempt{Model: m.Name, Provider: prov.Name, Error: err.Error(), Retries: retryCount, LatencyMs: attemptLatency})
 	}
 	if resp == nil && lastErr != nil {
 		status = http.StatusBadGateway
@@ -123,7 +130,8 @@ func (a *App) handleChat(c *gin.Context, clientFmt string, parseInbound func(map
 	if resp != nil {
 		usage = &resp.Usage
 	}
-	a.writeLog(req, dec, requestedModel, status, time.Since(start), errMsg, retryCount, usage)
+	traceBytes, _ := json.Marshal(attempts)
+	a.writeLog(req, dec, requestedModel, status, time.Since(start), errMsg, retryCount, usage, string(traceBytes))
 }
 
 func (a *App) handleChatCompletions(c *gin.Context) {
@@ -146,11 +154,13 @@ func (a *App) streamResponse(c *gin.Context, dec *routing.Decision, req *model.C
 	retryCount := 0
 	var lastErr error
 	succeeded := false
+	var attempts []store.Attempt
 	for i, m := range dec.Models {
 		dec.ServedModel = m.Name
 		prov, perr := a.Store.GetProvider(m.ProviderID)
 		if perr != nil {
 			lastErr = fmt.Errorf("provider not found for model %s", m.Name)
+			attempts = append(attempts, store.Attempt{Model: m.Name, Error: lastErr.Error()})
 			continue
 		}
 		apiKey, _ := store.Decrypt(a.CryptoKey, prov.APIKey)
@@ -168,6 +178,7 @@ func (a *App) streamResponse(c *gin.Context, dec *routing.Decision, req *model.C
 			enc = openaiChunkEncoder{}
 		}
 		started := false
+		attemptStart := time.Now()
 		rc, streamErr := a.Dispatcher.CallStreamWithRetry(prov.BaseURL, apiKey, prov.Protocol, prov.ProxyURL, body, prov.RetryMax, prov.RetryBackoffMs, func(ch *model.Chunk) error {
 			started = true
 			if ch != nil && ch.Usage != nil {
@@ -183,12 +194,15 @@ func (a *App) streamResponse(c *gin.Context, dec *routing.Decision, req *model.C
 			return nil
 		})
 		retryCount = rc
+		attemptLatency := time.Since(attemptStart).Milliseconds()
 		if streamErr == nil {
 			dec.FailoverCount = i
 			succeeded = true
+			attempts = append(attempts, store.Attempt{Model: m.Name, Provider: prov.Name, Success: true, Retries: retryCount, LatencyMs: attemptLatency})
 			break
 		}
 		lastErr = streamErr
+		attempts = append(attempts, store.Attempt{Model: m.Name, Provider: prov.Name, Error: streamErr.Error(), Retries: retryCount, LatencyMs: attemptLatency})
 		if started {
 			// Output already started; cannot fail over without duplicating content.
 			break
@@ -200,21 +214,24 @@ func (a *App) streamResponse(c *gin.Context, dec *routing.Decision, req *model.C
 		errMsg = lastErr.Error()
 		writeGatewayError(c, status, req.ClientFmt, lastErr.Error(), "upstream_error")
 	}
-	a.writeLog(req, dec, requestedModel, status, time.Since(start), errMsg, retryCount, usage)
+	traceBytes, _ := json.Marshal(attempts)
+	a.writeLog(req, dec, requestedModel, status, time.Since(start), errMsg, retryCount, usage, string(traceBytes))
 }
 
-func (a *App) writeLog(req *model.ChatRequest, dec *routing.Decision, requestedModel string, status int, dur time.Duration, errMsg string, retryCount int, usage *model.Usage) {
-	var prompt, completion, total int
+func (a *App) writeLog(req *model.ChatRequest, dec *routing.Decision, requestedModel string, status int, dur time.Duration, errMsg string, retryCount int, usage *model.Usage, trace string) {
+	var prompt, completion, total, cache int
 	if usage != nil {
 		prompt = usage.PromptTokens
 		completion = usage.CompletionTokens
 		total = usage.TotalTokens
+		cache = usage.CacheTokens
 	}
-	var jPrompt, jCompletion, jTotal int
+	var jPrompt, jCompletion, jTotal, jCache int
 	if dec.JudgeUsage != nil {
 		jPrompt = dec.JudgeUsage.PromptTokens
 		jCompletion = dec.JudgeUsage.CompletionTokens
 		jTotal = dec.JudgeUsage.TotalTokens
+		jCache = dec.JudgeUsage.CacheTokens
 	}
 	_ = a.Store.CreateLog(&store.RequestLog{
 		SessionID:             req.SessionID,
@@ -229,14 +246,17 @@ func (a *App) writeLog(req *model.ChatRequest, dec *routing.Decision, requestedM
 		RetryCount:            retryCount,
 		ServedModel:           dec.ServedModel,
 		FailoverCount:         dec.FailoverCount,
+		Trace:                 trace,
 		PromptTokens:          prompt,
 		CompletionTokens:      completion,
 		TotalTokens:           total,
+		CacheTokens:           cache,
 		JudgeModel:            dec.JudgeModel,
 		JudgeLatencyMs:        dec.JudgeLatency.Milliseconds(),
 		JudgePromptTokens:     jPrompt,
 		JudgeCompletionTokens: jCompletion,
 		JudgeTotalTokens:      jTotal,
+		JudgeCacheTokens:      jCache,
 	})
 }
 

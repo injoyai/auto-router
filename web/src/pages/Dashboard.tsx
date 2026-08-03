@@ -212,6 +212,12 @@ export default function Dashboard() {
     ? Math.round(logs.reduce((sum, l) => sum + l.latency_ms, 0) / logs.length)
     : 0
 
+  const formatLatency = (ms: number) => {
+    if (ms < 1000) return `${ms}ms`
+    if (ms < 60_000) return `${(ms / 1000).toFixed(2)}s`
+    return `${(ms / 60_000).toFixed(2)}m`
+  }
+
   const tokensTotal = stats?.tokens?.total ?? 0
   const formatTokens = (n: number) => {
     if (n < 1000) return `${n}`
@@ -275,7 +281,7 @@ export default function Dashboard() {
         <Col span={6} className="aurora-fade-in aurora-fade-in-4">
           <Card className="stat-card stat-card--amber">
             <div className="stat-card-icon"><ClockCircleOutlined /></div>
-            <Statistic title="平均延迟" value={avgLatency} suffix="ms" />
+            <Statistic title="平均耗时" value={formatLatency(avgLatency)} />
           </Card>
         </Col>
       </Row>

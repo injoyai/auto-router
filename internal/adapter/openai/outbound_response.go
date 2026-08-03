@@ -16,6 +16,16 @@ func ParseResponse(raw map[string]any) (*model.ChatResponse, error) {
 	if err := json.Unmarshal(b, &r); err != nil {
 		return nil, err
 	}
+	// Extract cache hit tokens from OpenAI's nested prompt_tokens_details.cached_tokens
+	var details struct {
+		Usage struct {
+			PromptTokensDetails struct {
+				CachedTokens int `json:"cached_tokens"`
+			} `json:"prompt_tokens_details"`
+		} `json:"usage"`
+	}
+	json.Unmarshal(b, &details)
+	r.Usage.CacheTokens = details.Usage.PromptTokensDetails.CachedTokens
 	return &r, nil
 }
 

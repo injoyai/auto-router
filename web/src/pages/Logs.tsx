@@ -3,7 +3,7 @@ import { Table, Tag, Select, Input, Button, Space, Card, Modal, message } from '
 import { DeleteOutlined } from '@ant-design/icons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { listLogs, clearLogs } from '../api/logs'
-import type { RequestLog } from '../api/logs'
+import type { RequestLog, Attempt } from '../api/logs'
 
 const reasonColors: Record<string, string> = {
   override: 'blue',
@@ -105,11 +105,15 @@ export default function Logs() {
       render: (v: number) => formatLatency(v),
     },
     {
-      title: '重试', dataIndex: 'retry_count', key: 'retry_count', width: 60,
-      render: (v: number) => v > 0 ? <Tag color="orange">{v}</Tag> : '-',
+      title: '输入', dataIndex: 'prompt_tokens', key: 'prompt_tokens', width: 70,
+      render: (v: number) => v > 0 ? v : '-',
     },
     {
-      title: 'Tokens', dataIndex: 'total_tokens', key: 'total_tokens', width: 90,
+      title: '输出', dataIndex: 'completion_tokens', key: 'completion_tokens', width: 70,
+      render: (v: number) => v > 0 ? v : '-',
+    },
+    {
+      title: '缓存命中', dataIndex: 'cache_tokens', key: 'cache_tokens', width: 90,
       render: (v: number) => v > 0 ? v : '-',
     },
     {
@@ -164,23 +168,41 @@ export default function Logs() {
         dataSource={data?.data}
         rowKey="id"
         loading={isLoading}
-        scroll={{ x: 1200 }}
+        scroll={{ x: 1320 }}
         expandable={{
           expandedRowRender: (r: RequestLog) => {
             const hasJudge = !!r.judge_model
             const hasRaw = !!r.judge_raw
-            if (!hasJudge && !hasRaw) {
-              return <p style={{ color: '#9fa1b5' }}>无判定数据</p>
+            let attempts: Attempt[] = []
+            try { attempts = JSON.parse(r.trace) || [] } catch { /* empty trace */ }
+            if (!hasJudge && !hasRaw && attempts.length === 0) {
+              return <p style={{ color: '#9fa1b5' }}>无详细信息</p>
             }
             return (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {attempts.length > 0 && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <strong style={{ color: '#4e4636', fontSize: 13 }}>模型尝试链路</strong>
+                    {attempts.map((a, idx) => (
+                      <div key={idx} style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center', fontSize: 13, color: '#6a604c', paddingLeft: 8 }}>
+                        <Tag color={a.success ? 'green' : 'red'} style={{ margin: 0 }}>
+                          {a.success ? '成功' : '失败'}
+                        </Tag>
+                        <span>{a.model}{a.provider ? ` (${a.provider})` : ''}</span>
+                        {a.retries > 0 && <span>重试 {a.retries} 次</span>}
+                        <span>{formatLatency(a.latency_ms)}</span>
+                        {a.error && <span style={{ color: '#f43f5e' }}>{a.error}</span>}
+                      </div>
+                    ))}
+                  </div>
+                )}
                 {hasJudge && (
                   <div style={{ display: 'flex', gap: 28, flexWrap: 'wrap', fontSize: 13, color: '#6a604c' }}>
                     <span><strong style={{ color: '#4e4636' }}>判定模型:</strong> {r.judge_model}</span>
                     <span><strong style={{ color: '#4e4636' }}>判定耗时:</strong> {formatLatency(r.judge_latency_ms)}</span>
                     <span>
                       <strong style={{ color: '#4e4636' }}>判定 Token:</strong>
-                      {' '}提示 {r.judge_prompt_tokens} / 补全 {r.judge_completion_tokens} / 合计 {r.judge_total_tokens}
+                      {' '}输入 {r.judge_prompt_tokens} / 输出 {r.judge_completion_tokens} / 缓存命中 {r.judge_cache_tokens}
                     </span>
                   </div>
                 )}
@@ -192,7 +214,7 @@ export default function Logs() {
               </div>
             )
           },
-          rowExpandable: (r: RequestLog) => !!r.judge_raw || !!r.judge_model,
+          rowExpandable: (r: RequestLog) => !!r.judge_raw || !!r.judge_model || !!r.trace,
         }}
         pagination={{
           current: page,

@@ -176,3 +176,19 @@ func TestStreamParserUsage(t *testing.T) {
 	assert.NoError(t, err)
 	assert.True(t, done)
 }
+
+func TestStreamParserUsageWithCache(t *testing.T) {
+	p := NewStreamParser("claude-3")
+
+	// message_start 携带 cache_read_input_tokens
+	p.Parse("event: message_start")
+	_, _, err := p.Parse(`data: {"type":"message_start","message":{"id":"msg_1","type":"message","role":"assistant","model":"claude-3","content":[],"stop_reason":null,"usage":{"input_tokens":15,"output_tokens":0,"cache_read_input_tokens":10}}}`)
+	assert.NoError(t, err)
+
+	// message_delta 携带 output_tokens
+	p.Parse("event: message_delta")
+	ch, _, err := p.Parse(`data: {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":25}}`)
+	assert.NoError(t, err)
+	assert.NotNil(t, ch.Usage)
+	assert.Equal(t, 10, ch.Usage.CacheTokens, "cache_read_input_tokens from message_start should be in final usage")
+}

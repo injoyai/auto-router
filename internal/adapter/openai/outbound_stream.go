@@ -24,6 +24,18 @@ func ParseSSELine(line string) (*model.Chunk, bool, error) {
 	if err := json.Unmarshal([]byte(data), &ch); err != nil {
 		return nil, false, err
 	}
+	// Extract cache hit tokens from prompt_tokens_details.cached_tokens if present
+	if ch.Usage != nil {
+		var details struct {
+			Usage struct {
+				PromptTokensDetails struct {
+					CachedTokens int `json:"cached_tokens"`
+				} `json:"prompt_tokens_details"`
+			} `json:"usage"`
+		}
+		json.Unmarshal([]byte(data), &details)
+		ch.Usage.CacheTokens = details.Usage.PromptTokensDetails.CachedTokens
+	}
 	return &ch, false, nil
 }
 

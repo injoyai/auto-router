@@ -20,3 +20,13 @@ func TestParseResponse(t *testing.T) {
 	assert.Equal(t, "stop", resp.Choices[0].FinishReason)
 	assert.Equal(t, 3, resp.Usage.TotalTokens)
 }
+
+func TestParseResponseWithCacheTokens(t *testing.T) {
+	raw := `{"model":"gpt-4","choices":[{"index":0,"message":{"role":"assistant","content":"hello"},"finish_reason":"stop"}],"usage":{"prompt_tokens":100,"completion_tokens":50,"total_tokens":150,"prompt_tokens_details":{"cached_tokens":80}}}`
+	var m map[string]any
+	_ = json.Unmarshal([]byte(raw), &m)
+
+	resp, err := ParseResponse(m)
+	assert.NoError(t, err)
+	assert.Equal(t, 80, resp.Usage.CacheTokens, "cached_tokens from prompt_tokens_details should be parsed into CacheTokens")
+}

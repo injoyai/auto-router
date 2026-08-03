@@ -244,6 +244,7 @@ type StreamParser struct {
 	model        string
 	currentEvent string
 	inputTokens  int
+	cacheTokens  int
 }
 
 // NewStreamParser creates a StreamParser for the given model name.
@@ -277,8 +278,9 @@ func (p *StreamParser) Parse(line string) (*model.Chunk, bool, error) {
 		var ms struct {
 			Message struct {
 				Usage struct {
-					InputTokens  int `json:"input_tokens"`
-					OutputTokens int `json:"output_tokens"`
+					InputTokens          int `json:"input_tokens"`
+					OutputTokens         int `json:"output_tokens"`
+					CacheReadInputTokens int `json:"cache_read_input_tokens"`
 				} `json:"usage"`
 			} `json:"message"`
 		}
@@ -286,6 +288,7 @@ func (p *StreamParser) Parse(line string) (*model.Chunk, bool, error) {
 			return nil, false, err
 		}
 		p.inputTokens = ms.Message.Usage.InputTokens
+		p.cacheTokens = ms.Message.Usage.CacheReadInputTokens
 		return nil, false, nil
 
 	case "content_block_delta":
@@ -330,6 +333,7 @@ func (p *StreamParser) Parse(line string) (*model.Chunk, bool, error) {
 				PromptTokens:     p.inputTokens,
 				CompletionTokens: md.Usage.OutputTokens,
 				TotalTokens:      p.inputTokens + md.Usage.OutputTokens,
+				CacheTokens:      p.cacheTokens,
 			},
 		}, false, nil
 

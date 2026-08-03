@@ -277,10 +277,10 @@ export default function Sources() {
               <Input />
             </Form.Item>
             <Form.Item name="base_url" label="Base URL" rules={[{ required: true, message: '请输入地址' }]}>
-              <Input placeholder="https://api.openai.com/v1" />
+              <Input placeholder="https://api.openai.com/v1" autoComplete="off" />
             </Form.Item>
             <Form.Item name="api_key" label="API Key" rules={[{ required: !editingProv, message: '请输入密钥' }]}>
-              <Input.Password placeholder="请输入密钥" />
+              <Input.Password placeholder="请输入密钥" autoComplete="new-password" />
             </Form.Item>
             <Form.Item name="protocol" label="协议" rules={[{ required: true }]}>
               <Select options={[{ value: 'openai', label: 'OpenAI' }, { value: 'claude', label: 'Claude' }]} />

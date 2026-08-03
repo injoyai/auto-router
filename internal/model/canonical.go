@@ -89,6 +89,7 @@ type Usage struct {
 	PromptTokens     int `json:"prompt_tokens"`
 	CompletionTokens int `json:"completion_tokens"`
 	TotalTokens      int `json:"total_tokens"`
+	CacheTokens      int `json:"cache_tokens"` // cache hit tokens (Claude: cache_read_input_tokens, OpenAI: prompt_tokens_details.cached_tokens)
 }
 
 // Delta is one streaming chunk (OpenAI-style).

@@ -1,5 +1,14 @@
 import apiClient from './client'
 
+export interface Attempt {
+  model: string
+  provider: string
+  success: boolean
+  error?: string
+  retries: number
+  latency_ms: number
+}
+
 export interface RequestLog {
   id: number
   session_id: string
@@ -12,15 +21,20 @@ export interface RequestLog {
   latency_ms: number
   error: string
   retry_count: number
+  served_model: string
+  failover_count: number
+  trace: string
   prompt_tokens: number
   completion_tokens: number
   total_tokens: number
+  cache_tokens: number
   // Judge call diagnostics (populated only when the judge was invoked).
   judge_model: string
   judge_latency_ms: number
   judge_prompt_tokens: number
   judge_completion_tokens: number
   judge_total_tokens: number
+  judge_cache_tokens: number
   created_at: string
   provider_name: string
 }
@@ -46,12 +60,13 @@ export interface TokenStatRow {
   prompt_tokens: number
   completion_tokens: number
   total_tokens: number
+  cache_tokens: number
 }
 
 export interface Stats {
   total: number
   by_reason: { Reason: string; Count: number }[]
-  tokens: { total: number; prompt: number; completion: number }
+  tokens: { total: number; prompt: number; completion: number; cache: number }
   by_model: TokenStatRow[]
   by_provider: TokenStatRow[]
 }

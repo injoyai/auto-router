@@ -78,6 +78,7 @@ func ParseResponse(raw map[string]any) (*model.ChatResponse, error) {
 			PromptTokens:     cr.Usage.InputTokens,
 			CompletionTokens: cr.Usage.OutputTokens,
 			TotalTokens:      cr.Usage.InputTokens + cr.Usage.OutputTokens,
+			CacheTokens:      cr.Usage.CacheReadInputTokens,
 		},
 	}, nil
 }
@@ -91,8 +92,9 @@ type claudeBlock struct {
 }
 
 type claudeUsage struct {
-	InputTokens  int `json:"input_tokens"`
-	OutputTokens int `json:"output_tokens"`
+	InputTokens           int `json:"input_tokens"`
+	OutputTokens          int `json:"output_tokens"`
+	CacheReadInputTokens  int `json:"cache_read_input_tokens"`
 }
 
 // EncodeResponseToClient converts a canonical response into a Claude /v1/messages
@@ -142,8 +144,9 @@ func EncodeResponseToClient(resp *model.ChatResponse) ([]byte, error) {
 		"content":     blocks,
 		"stop_reason": stopReason,
 		"usage": map[string]any{
-			"input_tokens":  resp.Usage.PromptTokens,
-			"output_tokens": resp.Usage.CompletionTokens,
+			"input_tokens":             resp.Usage.PromptTokens,
+			"output_tokens":            resp.Usage.CompletionTokens,
+			"cache_read_input_tokens":  resp.Usage.CacheTokens,
 		},
 	}
 	return json.Marshal(out)

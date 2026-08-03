@@ -2,6 +2,16 @@ package store
 
 import "time"
 
+// Attempt records one model attempt in the execution chain.
+type Attempt struct {
+	Model     string `json:"model"`
+	Provider  string `json:"provider"`
+	Success   bool   `json:"success"`
+	Error     string `json:"error,omitempty"`
+	Retries   int    `json:"retries"`
+	LatencyMs int64  `json:"latency_ms"`
+}
+
 type RequestLog struct {
 	ID               uint      `gorm:"primaryKey" json:"id"`
 	SessionID        string    `json:"session_id"`
@@ -16,9 +26,11 @@ type RequestLog struct {
 	RetryCount       int    `json:"retry_count"`
 	ServedModel      string `json:"served_model"`   // actually served model name (queue = the successful one)
 	FailoverCount    int    `json:"failover_count"` // queue failover count
+	Trace            string `json:"trace"`          // JSON array of Attempt, the full model queue attempt history
 	PromptTokens     int    `json:"prompt_tokens"`
 	CompletionTokens int       `json:"completion_tokens"`
 	TotalTokens      int       `json:"total_tokens"`
+	CacheTokens      int       `json:"cache_tokens"`
 	// Judge call diagnostics. Populated only when the judge model was invoked
 	// (auto routing). Kept separate from the main token fields so that judge
 	// overhead does not inflate the execution model's token stats.
@@ -27,6 +39,7 @@ type RequestLog struct {
 	JudgePromptTokens     int       `json:"judge_prompt_tokens"`
 	JudgeCompletionTokens int       `json:"judge_completion_tokens"`
 	JudgeTotalTokens      int       `json:"judge_total_tokens"`
+	JudgeCacheTokens      int       `json:"judge_cache_tokens"`
 	CreatedAt             time.Time `json:"created_at"`
 }
 
@@ -122,6 +135,7 @@ type TokenStatRow struct {
 	PromptTokens     int64  `json:"prompt_tokens"`
 	CompletionTokens int64  `json:"completion_tokens"`
 	TotalTokens      int64  `json:"total_tokens"`
+	CacheTokens      int64  `json:"cache_tokens"`
 }
 
 // TokenStatsTotal returns the sum of total_tokens across all logs.
@@ -146,7 +160,8 @@ func (s *Store) TokenStatsByModel() ([]TokenStatRow, error) {
 			count(*) as count,
 			sum(prompt_tokens) as prompt_tokens,
 			sum(completion_tokens) as completion_tokens,
-			sum(total_tokens) as total_tokens`).
+			sum(total_tokens) as total_tokens,
+			sum(cache_tokens) as cache_tokens`).
 		Where("COALESCE(NULLIF(served_model, ''), routed_model) != '' AND total_tokens > 0").
 		Group("COALESCE(NULLIF(served_model, ''), routed_model)").
 		Order("total_tokens desc").
@@ -162,7 +177,7 @@ func (s *Store) TokenStatsByModel() ([]TokenStatRow, error) {
 func (s *Store) TokenStatsByProvider() ([]TokenStatRow, error) {
 	var rows []TokenStatRow
 	err := s.DB.Table("request_logs").
-		Select("providers.name as provider, count(*) as count, sum(request_logs.prompt_tokens) as prompt_tokens, sum(request_logs.completion_tokens) as completion_tokens, sum(request_logs.total_tokens) as total_tokens").
+		Select("providers.name as provider, count(*) as count, sum(request_logs.prompt_tokens) as prompt_tokens, sum(request_logs.completion_tokens) as completion_tokens, sum(request_logs.total_tokens) as total_tokens, sum(request_logs.cache_tokens) as cache_tokens").
 		Joins("LEFT JOIN models ON COALESCE(NULLIF(request_logs.served_model, ''), request_logs.routed_model) = models.name").
 		Joins("LEFT JOIN providers ON models.provider_id = providers.id").
 		Where("COALESCE(NULLIF(request_logs.served_model, ''), request_logs.routed_model) != '' AND request_logs.total_tokens > 0 AND providers.name != ''").

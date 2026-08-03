@@ -25,6 +25,16 @@ func TestParseResponseText(t *testing.T) {
 	assert.Equal(t, 15, resp.Usage.TotalTokens)
 }
 
+func TestParseResponseWithCacheTokens(t *testing.T) {
+	raw := `{"id":"msg_1","type":"message","role":"assistant","model":"claude-3-5-sonnet-20241022","content":[{"type":"text","text":"Hello!"}],"stop_reason":"end_turn","usage":{"input_tokens":10,"output_tokens":5,"cache_read_input_tokens":8}}`
+	var m map[string]any
+	_ = json.Unmarshal([]byte(raw), &m)
+
+	resp, err := ParseResponse(m)
+	assert.NoError(t, err)
+	assert.Equal(t, 8, resp.Usage.CacheTokens, "cache_read_input_tokens should be parsed into CacheTokens")
+}
+
 func TestParseResponseToolUse(t *testing.T) {
 	raw := `{"id":"msg_1","type":"message","role":"assistant","model":"claude-3-5-sonnet-20241022","content":[{"type":"text","text":"Let me check."},{"type":"tool_use","id":"tu_1","name":"get_weather","input":{"location":"SF"}}],"stop_reason":"tool_use","usage":{"input_tokens":10,"output_tokens":10}}`
 	var m map[string]any

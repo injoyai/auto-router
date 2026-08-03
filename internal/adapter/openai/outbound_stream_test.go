@@ -74,3 +74,13 @@ func TestParseSSELineNoUsage(t *testing.T) {
 	assert.NotNil(t, ch)
 	assert.Nil(t, ch.Usage, "Usage should be nil for non-final chunk")
 }
+
+func TestParseSSELineWithUsageAndCache(t *testing.T) {
+	// OpenAI 流式最终 chunk 携带 usage + prompt_tokens_details.cached_tokens
+	line := `data: {"id":"chatcmpl-1","object":"chat.completion.chunk","created":1,"model":"gpt-4o","choices":[],"usage":{"prompt_tokens":100,"completion_tokens":20,"total_tokens":120,"prompt_tokens_details":{"cached_tokens":80}}}`
+	ch, _, err := ParseSSELine(line)
+	assert.NoError(t, err)
+	assert.NotNil(t, ch)
+	assert.NotNil(t, ch.Usage)
+	assert.Equal(t, 80, ch.Usage.CacheTokens, "cached_tokens should be parsed from prompt_tokens_details")
+}

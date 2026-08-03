@@ -255,6 +255,7 @@ func (a *App) handleTestModel(c *gin.Context) {
 		PromptTokens:     usage.PromptTokens,
 		CompletionTokens: usage.CompletionTokens,
 		TotalTokens:      usage.TotalTokens,
+		CacheTokens:      usage.CacheTokens,
 	})
 	resp := gin.H{
 		"ok":         ok,
@@ -269,6 +270,7 @@ func (a *App) handleTestModel(c *gin.Context) {
 			"prompt_tokens":     usage.PromptTokens,
 			"completion_tokens": usage.CompletionTokens,
 			"total_tokens":      usage.TotalTokens,
+			"cache_tokens":      usage.CacheTokens,
 		}
 	}
 	if reply != "" {
@@ -461,7 +463,7 @@ func (a *App) handleStats(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"total":       total,
 		"by_reason":   reasons,
-		"tokens":      gin.H{"total": totalTokens, "prompt": tokenSumPrompt(byModel), "completion": tokenSumCompletion(byModel)},
+		"tokens":      gin.H{"total": totalTokens, "prompt": tokenSumPrompt(byModel), "completion": tokenSumCompletion(byModel), "cache": tokenSumCache(byModel)},
 		"by_model":    byModel,
 		"by_provider": byProvider,
 	})
@@ -481,6 +483,15 @@ func tokenSumCompletion(rows []store.TokenStatRow) int64 {
 	var s int64
 	for _, r := range rows {
 		s += r.CompletionTokens
+	}
+	return s
+}
+
+// tokenSumCache sums CacheTokens across rows.
+func tokenSumCache(rows []store.TokenStatRow) int64 {
+	var s int64
+	for _, r := range rows {
+		s += r.CacheTokens
 	}
 	return s
 }
