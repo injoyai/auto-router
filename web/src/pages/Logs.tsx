@@ -93,7 +93,7 @@ export default function Logs() {
       title: '路由类型', dataIndex: 'route_reason', key: 'route_reason', width: 100,
       render: (v: string) => <Tag color={reasonColors[v] ?? 'default'} style={{ margin: 0, marginLeft: -10 }}>{reasonLabels[v] ?? v}</Tag>,
     },
-    { title: '供应商', dataIndex: 'provider_name', key: 'provider_name', width: 120, align: 'center' as const,
+    { title: '供应商', dataIndex: 'provider_name', key: 'provider_name', width: 90, ellipsis: true,
       render: (v: string) => v || '-',
     },
     { title: '执行模型', dataIndex: 'routed_model', key: 'routed_model', width: 120 },
