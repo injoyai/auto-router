@@ -81,14 +81,16 @@ web/
 3. **服务商代理**: 每个 Provider 独立配置 `ProxyURL`，Dispatcher 按 proxy URL 缓存 HTTP Client
 4. **队列成员拖拽排序**: 前端原生 HTML5 拖拽 API，松手后调用 `ReplaceGroupItems` 保存
 5. **多数据库支持**: 通过 `Dialer` 接口抽象驱动差异（`internal/store/dialer.go`）。默认 SQLite，通过 `DB_DRIVER=mysql` 切换 MySQL（DSN 由 `DB_DSN` 提供）。`store.Open(dialer, dsn)` 仅保留通用逻辑（AutoMigrate + seed），驱动特定初始化（SQLite PRAGMA、MySQL 连接池）在各 Dialer 实现内。现有 SQL 均为 ANSI 标准，store 层查询代码零改动
+6. **路由类型**: `override`（指定路由）、`judge`（智能路由，含判定失败后走兜底队列）、`judge_call`（判定调用）、`test`（测试）。旧的 `fallback` 类型已合并到 `judge`
+7. **请求链路追踪**: `RequestLog.Trace` 存储完整链路（JSON `[]Attempt`），包含判定尝试（`Type="judge"`）和执行模型尝试（`Type=""`），每次重试独立一条记录。`Attempt` 含 `Status`（HTTP 状态码）、`LatencyMs`、`Error` 等
 
 ## 路由判定 (Judge Queue)
 
 路由判定由"单模型"改为"判定队列"（链式失败转移，方案 A）：
 
 - `RoutingConfig.JudgeGroupID` 指向 `ModelGroup`（旧 `JudgeModelID` 已删除），判定队列本身也是普通队列
-- `JudgeClient.Judge(chain, ...)` 签名接收有序 chain，返回 `(raw, servedModel, usage, err)`；逐模型失败转移封装在 `lazyJudge` 内
-- `defaultJudgeClient` 降级为内部辅助（不再实现 `JudgeClient` 接口），单模型签名不变
+- `JudgeClient.Judge(chain, ...)` 签名接收有序 chain，返回 `(raw, servedModel, usage, trace, err)`；逐模型失败转移封装在 `lazyJudge` 内
+- `defaultJudgeClient` 降级为内部辅助（不再实现 `JudgeClient` 接口），单模型签名接收 `retryMax`/`retryBackoff` 参数，使用 `CallWithRetry` 支持重试，返回 `[]store.Attempt` trace
 - 构建候选队列时排除判定队列自身（`g.ID == *rc.JudgeGroupID`），避免自路由
 - **已删除**: `Model.IsJudge` 字段、`SetJudgeModel`/`GetJudgeModel`/`IsModelReferenced`、`POST /admin/models/:id/judge` 接口
 - **迁移**: `migrateLegacyColumns` 在 `store.Open` 中先于 `migrateLegacyJudge` 执行，DropColumn 删除更早重构遗留的 `model_groups.display_name`/`description`、`models.display_name`（GORM AutoMigrate 不删列，NOT NULL 旧列会阻断新 INSERT）；随后 `migrateLegacyJudge` 以旧 `is_judge` 列为首选源迁移为 'judge' 队列并写入 `JudgeGroupID`，再 DropColumn 删除 `is_judge` 与 `judge_model_id`
