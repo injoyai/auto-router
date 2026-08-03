@@ -5,13 +5,6 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { listLogs, clearLogs } from '../api/logs'
 import type { RequestLog, Attempt } from '../api/logs'
 
-const reasonColors: Record<string, string> = {
-  override: 'blue',
-  judge: 'geekblue',
-  judge_call: 'cyan',
-  test: 'purple',
-}
-
 // 格式化耗时:ms -> ms/s/m,保留 2 位有效小数
 const formatLatency = (ms: number) => {
   if (ms < 1000) return `${ms}ms`
@@ -25,6 +18,14 @@ const reasonLabels: Record<string, string> = {
   judge: '智能路由',
   judge_call: '判定调用',
   test: '测试模型',
+}
+
+// Tag 配色(使用 antd 预设色板)
+const reasonColors: Record<string, string> = {
+  override: 'blue',
+  judge: 'geekblue',
+  judge_call: 'cyan',
+  test: 'purple',
 }
 
 export default function Logs() {
@@ -90,9 +91,9 @@ export default function Logs() {
     { title: '请求模型', dataIndex: 'requested_model', key: 'requested_model', width: 120 },
     {
       title: '路由类型', dataIndex: 'route_reason', key: 'route_reason', width: 100,
-      render: (v: string) => <Tag color={reasonColors[v] ?? 'default'} style={{ margin: 0 }}>{reasonLabels[v] ?? v}</Tag>,
+      render: (v: string) => <Tag color={reasonColors[v] ?? 'default'} style={{ margin: 0, marginLeft: -10 }}>{reasonLabels[v] ?? v}</Tag>,
     },
-    { title: '供应商', dataIndex: 'provider_name', key: 'provider_name', width: 120,
+    { title: '供应商', dataIndex: 'provider_name', key: 'provider_name', width: 120, align: 'center' as const,
       render: (v: string) => v || '-',
     },
     { title: '执行模型', dataIndex: 'routed_model', key: 'routed_model', width: 120 },
