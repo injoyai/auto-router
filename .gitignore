@@ -12,6 +12,8 @@ auto-router.exe
 # Local data directory (default SQLite location)
 /data/
 
+config/config.yaml
+
 # Build output
 /dist/
 
