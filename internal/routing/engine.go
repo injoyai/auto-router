@@ -161,7 +161,7 @@ func (e *Engine) Route(req *model.ChatRequest) (*Decision, error) {
 		if g, err := e.Store.GetModelGroup(*rc.DefaultGroupID); err == nil && g != nil && g.Enabled {
 			if chain, err := e.Store.GetGroupChain(g.ID); err == nil && len(chain) > 0 {
 				out := toPtrChain(chain)
-				return &Decision{ModelName: g.Name, Model: out[0], Models: out, Reason: "fallback", JudgeRaw: judgeRaw, JudgeModel: judgeName, JudgeUsage: judgeUsage, JudgeLatency: judgeLatency, JudgeTrace: judgeTrace}, nil
+				return &Decision{ModelName: g.Name, Model: out[0], Models: out, Reason: "judge", JudgeRaw: judgeRaw, JudgeModel: judgeName, JudgeUsage: judgeUsage, JudgeLatency: judgeLatency, JudgeTrace: judgeTrace}, nil
 			}
 		}
 	}

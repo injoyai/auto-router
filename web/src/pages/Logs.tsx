@@ -9,7 +9,6 @@ const reasonColors: Record<string, string> = {
   override: 'blue',
   judge: 'geekblue',
   judge_call: 'cyan',
-  fallback: 'orange',
   test: 'purple',
 }
 
@@ -25,7 +24,6 @@ const reasonLabels: Record<string, string> = {
   override: '指定路由',
   judge: '智能路由',
   judge_call: '判定调用',
-  fallback: '兜底路由',
   test: '测试',
 }
 
@@ -136,7 +134,6 @@ export default function Logs() {
             options={[
               { value: 'override', label: '指定路由' },
               { value: 'judge', label: '智能路由' },
-              { value: 'fallback', label: '兜底路由' },
               { value: 'test', label: '测试' },
             ]}
           />

@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -156,23 +155,18 @@ func (l *lazyJudge) Judge(chain []*store.Model, candidates []routing.Candidate, 
 			continue
 		}
 		apiKey, _ := store.Decrypt(l.key, prov.APIKey)
-		jStart := time.Now()
-		raw, usage, err := routing.NewJudgeClient(l.disp, prov.BaseURL, apiKey, prov.Protocol, prov.ProxyURL).Judge(jm, candidates, userText)
-		jLatency := time.Since(jStart).Milliseconds()
+		raw, usage, attempts, err := routing.NewJudgeClient(l.disp, prov.BaseURL, apiKey, prov.Protocol, prov.ProxyURL, prov.RetryMax, prov.RetryBackoffMs).Judge(jm, candidates, userText)
+		// Backfill provider name on each attempt (defaultJudgeClient doesn't have it)
+		for i := range attempts {
+			attempts[i].Provider = prov.Name
+		}
+		trace = append(trace, attempts...)
 		if err == nil && raw != "" {
-			trace = append(trace, store.Attempt{Type: "judge", Model: jm.Name, Provider: prov.Name, Success: true, Status: 200, LatencyMs: jLatency})
 			return raw, jm.Name, usage, trace, nil
 		}
-		errMsg := ""
-		status := 0
 		if err != nil {
-			errMsg = err.Error()
-			status = upstream.ErrorStatus(err)
 			lastErr = err
-		} else {
-			errMsg = "empty output"
 		}
-		trace = append(trace, store.Attempt{Type: "judge", Model: jm.Name, Provider: prov.Name, Error: errMsg, Status: status, LatencyMs: jLatency})
 	}
 	if lastErr == nil {
 		return "", "", nil, trace, fmt.Errorf("judge queue exhausted")

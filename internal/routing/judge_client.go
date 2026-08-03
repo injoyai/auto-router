@@ -11,25 +11,28 @@ import (
 )
 
 // defaultJudgeClient is the low-level single-model judge caller used internally
-// by lazyJudge. It issues one non-streaming request to a judge model via the
-// upstream dispatcher. Unlike routing.JudgeClient (whose Judge iterates a
-// chain), defaultJudgeClient.Judge targets a single model.
+// by lazyJudge. It issues requests to a judge model via the upstream dispatcher
+// with retry support. Unlike routing.JudgeClient (whose Judge iterates a chain),
+// defaultJudgeClient.Judge targets a single model.
 type defaultJudgeClient struct {
-	disp     *upstream.Dispatcher
-	baseURL  string
-	apiKey   string
-	protocol string
-	proxyURL string
+	disp         *upstream.Dispatcher
+	baseURL      string
+	apiKey       string
+	protocol     string
+	proxyURL     string
+	retryMax     int
+	retryBackoff int
 }
 
-func NewJudgeClient(d *upstream.Dispatcher, baseURL, apiKey, protocol, proxyURL string) *defaultJudgeClient {
-	return &defaultJudgeClient{disp: d, baseURL: baseURL, apiKey: apiKey, protocol: protocol, proxyURL: proxyURL}
+func NewJudgeClient(d *upstream.Dispatcher, baseURL, apiKey, protocol, proxyURL string, retryMax, retryBackoff int) *defaultJudgeClient {
+	return &defaultJudgeClient{disp: d, baseURL: baseURL, apiKey: apiKey, protocol: protocol, proxyURL: proxyURL, retryMax: retryMax, retryBackoff: retryBackoff}
 }
 
-// Judge calls the judge model with a 10s timeout. The request body is built
-// according to the judge provider's protocol: Claude requires max_tokens and
-// a top-level system field (extracted from the first system message).
-func (j *defaultJudgeClient) Judge(judgeModel *store.Model, candidates []Candidate, userText string) (string, *model.Usage, error) {
+// Judge calls the judge model with a 10s timeout and provider-level retries.
+// Returns the raw output, token usage, per-retry attempt trace, and error.
+// The request body is built according to the judge provider's protocol:
+// Claude requires max_tokens and a top-level system field.
+func (j *defaultJudgeClient) Judge(judgeModel *store.Model, candidates []Candidate, userText string) (string, *model.Usage, []store.Attempt, error) {
 	msgs := BuildJudgeMessages(candidates, userText)
 	var body map[string]any
 	if j.protocol == "claude" {
@@ -59,13 +62,21 @@ func (j *defaultJudgeClient) Judge(judgeModel *store.Model, candidates []Candida
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	resp, err := j.disp.CallCtx(ctx, j.baseURL, j.apiKey, j.protocol, j.proxyURL, body)
+
+	var attempts []store.Attempt
+	resp, _, err := j.disp.CallWithRetry(ctx, j.baseURL, j.apiKey, j.protocol, j.proxyURL, body, j.retryMax, j.retryBackoff, func(success bool, status int, e error, latencyMs int64) {
+		a := store.Attempt{Type: "judge", Model: judgeModel.Name, Success: success, Status: status, LatencyMs: latencyMs}
+		if e != nil {
+			a.Error = e.Error()
+		}
+		attempts = append(attempts, a)
+	})
 	if err != nil {
-		return "", nil, err
+		return "", nil, attempts, err
 	}
 	if len(resp.Choices) == 0 {
-		return "", nil, fmt.Errorf("judge returned no choices")
+		return "", nil, attempts, fmt.Errorf("judge returned no choices")
 	}
 	usage := &resp.Usage
-	return resp.Choices[0].Message.Content, usage, nil
+	return resp.Choices[0].Message.Content, usage, attempts, nil
 }
