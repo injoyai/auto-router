@@ -24,7 +24,7 @@ const reasonLabels: Record<string, string> = {
   override: '指定路由',
   judge: '智能路由',
   judge_call: '判定调用',
-  test: '测试',
+  test: '测试模型',
 }
 
 export default function Logs() {
@@ -90,9 +90,12 @@ export default function Logs() {
     { title: '请求模型', dataIndex: 'requested_model', key: 'requested_model', width: 120 },
     {
       title: '路由类型', dataIndex: 'route_reason', key: 'route_reason', width: 100,
-      render: (v: string) => <Tag color={reasonColors[v] ?? 'default'}>{reasonLabels[v] ?? v}</Tag>,
+      render: (v: string) => <Tag color={reasonColors[v] ?? 'default'} style={{ margin: 0 }}>{reasonLabels[v] ?? v}</Tag>,
     },
-    { title: '模型队列', dataIndex: 'routed_model', key: 'routed_model', width: 120 },
+    { title: '供应商', dataIndex: 'provider_name', key: 'provider_name', width: 120,
+      render: (v: string) => v || '-',
+    },
+    { title: '执行模型', dataIndex: 'routed_model', key: 'routed_model', width: 120 },
     {
       title: '状态', dataIndex: 'status', key: 'status', width: 70,
       render: (v: number) => <span style={{ color: v < 400 ? '#10b981' : '#f43f5e', fontWeight: 600 }}>{v}</span>,
@@ -134,7 +137,7 @@ export default function Logs() {
             options={[
               { value: 'override', label: '指定路由' },
               { value: 'judge', label: '智能路由' },
-              { value: 'test', label: '测试' },
+              { value: 'test', label: '测试模型' },
             ]}
           />
           <Input.Search
