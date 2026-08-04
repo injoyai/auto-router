@@ -123,6 +123,7 @@ web/
 7. **useEffect 依赖竞态**: `Queues.tsx` 加载队列成员时，effect 依赖只有 `[groups]` 但内部用了从 `models` 派生的 `enabledModels`。`groups` 先于 `models` 加载时 `enabledModels` 为空，所有 model_id 被 filter 掉且不可恢复（空数组 truthy 导致 guard 跳过重载）。修复：加 `!models` 前置判断 + `models` 入 deps
 8. **Antd Form.Item 多个子元素导致 setFieldsValue 失效**: `Form.Item` 内若同时放 `<Input>` 和 `<div>` 提示文本，Field 组件收到的是数组而非单个元素，`value` 无法注入到 Input，`form.setFieldsValue` 设置的值不会回显。修复: 提示文本移到 `Form.Item` 的 `extra` 属性，保证 `Form.Item` 只有一个子元素
 9. **Modal destroyOnClose 与 form.setFieldsValue 时机冲突**: `Modal` 用 `destroyOnClose` 时，Form 组件在关闭后被销毁，`useEffect` 内的 `setFieldsValue` 可能执行在 Form 重建前，导致编辑时数据为空。修复: 移除 `destroyOnClose`，改在 `openEdit`/`openCreate` 事件处理函数中直接 `form.resetFields()` + `form.setFieldsValue()`
+10. **判定链路空内容语义**: `Attempt.Success` 只代表 HTTP 调用成功(`err==nil`)，不等同"判定成功"。`lazyJudge` 真正成功条件是 `err==nil && raw!=""`。当 judge 模型返回 200 但 `choices[0].message.content` 为空时，需显式视为判定失败(标记最后一次 attempt `Success=false`+Error 说明、设 `lastErr`)，否则 trace 会出现"Success=true 却继续判定下一个模型"的假象，且全部空内容时兜底错误是裸 `judge queue exhausted` 无原因。修复见 `lazyJudge.Judge` 的 `err==nil && raw==""` 分支，错误文案 `judge model X returned empty content`
 
 ## 后端 API 变更记录
 

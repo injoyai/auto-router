@@ -94,3 +94,50 @@ func TestLazyJudgeAllFail(t *testing.T) {
 	assert.Empty(t, servedModel)
 	assert.Nil(t, usage)
 }
+
+// judgeEmptyBody is a valid 200 response whose choice content is empty.
+const judgeEmptyBody = `{"model":"judge-fail","choices":[{"index":0,"message":{"role":"assistant","content":""},"finish_reason":"stop"}],"usage":{"total_tokens":3}}`
+
+// TestLazyJudgeEmptyContentFailover verifies that when a judge model returns
+// HTTP 200 but empty content, lazyJudge treats it as a failed attempt: the
+// trace attempt is marked failed with a descriptive error, and judging falls
+// over to the next model in the chain.
+func TestLazyJudgeEmptyContentFailover(t *testing.T) {
+	emptySrv := startJudgeStub(t, http.StatusOK, judgeEmptyBody)
+	okSrv := startJudgeStub(t, http.StatusOK, judgeOKBody)
+
+	st, key, chain := newLazyJudgeTestStore(t, emptySrv.URL, okSrv.URL)
+	lj := &lazyJudge{st: st, disp: upstream.New(), key: key}
+
+	raw, servedModel, _, trace, err := lj.Judge(chain, []routing.Candidate{{Name: "deepseek-v4-flash"}}, "hi")
+	assert.NoError(t, err)
+	assert.Equal(t, "deepseek-v4-flash", raw)
+	assert.Equal(t, "judge-ok", servedModel)
+
+	// 第一个模型 HTTP 200 但内容为空,其最后一次 attempt 应标记为失败并说明原因
+	var firstAttempts []store.Attempt
+	for _, a := range trace {
+		if a.Model == "judge-fail" {
+			firstAttempts = append(firstAttempts, a)
+		}
+	}
+	assert.NotEmpty(t, firstAttempts)
+	last := firstAttempts[len(firstAttempts)-1]
+	assert.False(t, last.Success, "empty-content attempt should be marked failed")
+	assert.Contains(t, last.Error, "empty content")
+}
+
+// TestLazyJudgeAllEmpty verifies that when every judge model returns HTTP 200
+// but empty content, lazyJudge returns an error that explains the cause
+// (instead of a bare "judge queue exhausted" with no wrapped error).
+func TestLazyJudgeAllEmpty(t *testing.T) {
+	emptySrv1 := startJudgeStub(t, http.StatusOK, judgeEmptyBody)
+	emptySrv2 := startJudgeStub(t, http.StatusOK, judgeEmptyBody)
+
+	st, key, chain := newLazyJudgeTestStore(t, emptySrv1.URL, emptySrv2.URL)
+	lj := &lazyJudge{st: st, disp: upstream.New(), key: key}
+
+	_, _, _, _, err := lj.Judge(chain, []routing.Candidate{{Name: "deepseek-v4-flash"}}, "hi")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "empty content")
+}

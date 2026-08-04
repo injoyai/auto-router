@@ -160,6 +160,15 @@ func (l *lazyJudge) Judge(chain []*store.Model, candidates []routing.Candidate, 
 		for i := range attempts {
 			attempts[i].Provider = prov.Name
 		}
+		// HTTP 成功但判定模型返回空内容,视为判定失败:标记最后一次 attempt 并生成
+		// 带说明的错误,使 trace 与实际判定语义一致、兜底错误也能体现具体原因
+		if err == nil && raw == "" {
+			err = fmt.Errorf("judge model %s returned empty content", jm.Name)
+			if len(attempts) > 0 {
+				attempts[len(attempts)-1].Success = false
+				attempts[len(attempts)-1].Error = err.Error()
+			}
+		}
 		trace = append(trace, attempts...)
 		if err == nil && raw != "" {
 			return raw, jm.Name, usage, trace, nil
