@@ -112,6 +112,13 @@ web/
 
 判断要点: 看当前这一步而非整体目标；动词判断("设计/分析/评估/排查/构思"为推理类，"实现/编写/修改/补充/翻译"为执行类)；不确定时倾向选强模型兜底
 
+### 判定采样参数与格式约束
+
+- **OpenAI 协议**: `judge_client.go` 中 body 显式设置 `temperature=0`(确定性判定,避免随机性导致格式漂移)。**不要设 `max_tokens`**: 实测 DeepSeek-V4-Flash 正常判定输出 300~600 token,设过小(如 200)会导致部分服务商返回 200 但 content 为空(可能是输出尚未开始就被截断或触发边界条件)。Claude 协议沿用 `max_tokens=100`(Claude 对该参数实现标准,无此问题)。格式约束主要靠 system prompt + user message 末尾提醒,不靠 `max_tokens` 截断
+- **System Prompt 强化**: `judge.go` 的 `judgeSystemPrompt` 开头明确"只负责选择队列,不负责执行用户任务",禁止输出工具调用格式(`tool_calls`、XML、`<｜DSML｜>` 等 markup)、禁止模拟终端命令。回复格式要求改为"严格三行,不要包裹在代码块或 XML 中,不要加引号/markdown 修饰"
+- **User Message 末尾格式提醒**: `BuildJudgeMessages` 在 user message 末尾追加"请按格式回复三行...不要调用工具"。长输入下 Flash 模型容易"忘记" system 中的格式要求,在末尾(模型注意力最集中位置)重申可显著降低幻觉概率
+- **背景**: DeepSeek-V4-Flash 曾把判定输入(用户真实请求文本)误认为自己要执行的任务,输出 `<｜DSML｜tool_calls>` 格式的工具调用幻觉(548 token),完全无视 system prompt 的三行格式要求,最终静默走默认队列
+
 ## 踩坑记录
 
 1. **`gorm:"-:migration"` 仍会 INSERT**: 该标签只跳过建列，不跳过写入。JOIN 查询的附加字段必须用独立结构体(如 `LogWithProvider`)，不能加到 GORM model 上
@@ -124,6 +131,8 @@ web/
 8. **Antd Form.Item 多个子元素导致 setFieldsValue 失效**: `Form.Item` 内若同时放 `<Input>` 和 `<div>` 提示文本，Field 组件收到的是数组而非单个元素，`value` 无法注入到 Input，`form.setFieldsValue` 设置的值不会回显。修复: 提示文本移到 `Form.Item` 的 `extra` 属性，保证 `Form.Item` 只有一个子元素
 9. **Modal destroyOnClose 与 form.setFieldsValue 时机冲突**: `Modal` 用 `destroyOnClose` 时，Form 组件在关闭后被销毁，`useEffect` 内的 `setFieldsValue` 可能执行在 Form 重建前，导致编辑时数据为空。修复: 移除 `destroyOnClose`，改在 `openEdit`/`openCreate` 事件处理函数中直接 `form.resetFields()` + `form.setFieldsValue()`
 10. **判定链路空内容语义**: `Attempt.Success` 只代表 HTTP 调用成功(`err==nil`)，不等同"判定成功"。`lazyJudge` 真正成功条件是 `err==nil && raw!=""`。当 judge 模型返回 200 但 `choices[0].message.content` 为空时，需显式视为判定失败(标记最后一次 attempt `Success=false`+Error 说明、设 `lastErr`)，否则 trace 会出现"Success=true 却继续判定下一个模型"的假象，且全部空内容时兜底错误是裸 `judge queue exhausted` 无原因。修复见 `lazyJudge.Judge` 的 `err==nil && raw==""` 分支，错误文案 `judge model X returned empty content`
+11. **判定链路 choices 为空**: 同 #10 的另一条路径。`defaultJudgeClient.Judge` 在 `len(resp.Choices)==0` 时返回 `err="judge returned no choices"`，但 `CallWithRetry` 的 `onAttempt` 已按 HTTP 层 err==nil 记录 `Success=true`。`lazyJudge` 原有的 `err==nil && raw==""` 分支不命中(err != nil)，不纠正 Success 标记，trace 同样出现"Success=true 却继续判定下一个"的假象。修复:将纠正逻辑推广为"只要 `err != nil` 且最后一次 attempt 仍为 `Success=true`，就统一标失败并补 Error"，覆盖 content 为空、choices 为空、以及未来可能的 HTTP 成功但判定语义失败的所有情况。修复见 `lazyJudge.Judge` 两个连续 `if` 块。典型特征:某次判定 200 + 耗时异常短(如 242ms 处理 7K+ token)却标记成功，链路却继续走下一个判定模型
+12. **判定请求 max_tokens 过小导致 empty content**: OpenAI 协议判定请求设 `max_tokens=200`(按"三行格式理论上 50~100 token"估算)后,所有判定都返回 `judge model X returned empty content`。实测 DeepSeek-V4-Flash 正常判定输出 300~600 token(带 [任务][理由] 描述),且部分服务商在 `max_tokens` 小于实际输出时返回 200 但 content 完全为空(非标准截断行为,标准 OpenAI 应返回部分内容 + `finish_reason=length`)。教训:不要用 `max_tokens` 来约束判定输出格式,应靠 system prompt + user message 末尾提醒;`max_tokens` 只在确知模型输出上限时设置。修复:移除 OpenAI 协议的 `max_tokens`,保留 `temperature=0`(该参数对所有服务商安全)
 
 ## 后端 API 变更记录
 

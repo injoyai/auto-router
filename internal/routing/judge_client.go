@@ -54,10 +54,15 @@ func (j *defaultJudgeClient) Judge(judgeModel *store.Model, candidates []Candida
 			"stream":     false,
 		}
 	} else {
+		// temperature=0: 判定是确定性任务,避免随机性导致格式漂移。
+		// 不设 max_tokens: 实测 DeepSeek-V4-Flash 正常判定输出 300~600 token,
+		// 设过小(如 200)会导致部分服务商返回 200 但 content 为空。
+		// 格式约束主要靠 system prompt + user message 末尾提醒。
 		body = map[string]any{
-			"model":    judgeModel.Name,
-			"messages": msgs,
-			"stream":   false,
+			"model":       judgeModel.Name,
+			"messages":    msgs,
+			"stream":      false,
+			"temperature": 0,
 		}
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

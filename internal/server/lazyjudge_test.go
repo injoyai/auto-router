@@ -141,3 +141,38 @@ func TestLazyJudgeAllEmpty(t *testing.T) {
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "empty content")
 }
+
+// judgeNoChoicesBody is a valid 200 response with an empty choices array.
+const judgeNoChoicesBody = `{"model":"judge-fail","choices":[],"usage":{"total_tokens":3}}`
+
+// TestLazyJudgeNoChoicesFailover verifies that when a judge model returns HTTP 200
+// but an empty choices array, lazyJudge treats it as a failed attempt: the trace
+// attempt is marked failed with a descriptive error, and judging falls over to
+// the next model in the chain. This covers the case where defaultJudgeClient
+// returns err="judge returned no choices" while the HTTP-level attempt was
+// marked Success=true -- without correction the trace would misleadingly show
+// "Success=true yet continued to the next model".
+func TestLazyJudgeNoChoicesFailover(t *testing.T) {
+	noChoicesSrv := startJudgeStub(t, http.StatusOK, judgeNoChoicesBody)
+	okSrv := startJudgeStub(t, http.StatusOK, judgeOKBody)
+
+	st, key, chain := newLazyJudgeTestStore(t, noChoicesSrv.URL, okSrv.URL)
+	lj := &lazyJudge{st: st, disp: upstream.New(), key: key}
+
+	raw, servedModel, _, trace, err := lj.Judge(chain, []routing.Candidate{{Name: "deepseek-v4-flash"}}, "hi")
+	assert.NoError(t, err)
+	assert.Equal(t, "deepseek-v4-flash", raw)
+	assert.Equal(t, "judge-ok", servedModel)
+
+	// 第一个模型 HTTP 200 但 choices 为空,其最后一次 attempt 应标记为失败并说明原因
+	var firstAttempts []store.Attempt
+	for _, a := range trace {
+		if a.Model == "judge-fail" {
+			firstAttempts = append(firstAttempts, a)
+		}
+	}
+	assert.NotEmpty(t, firstAttempts)
+	last := firstAttempts[len(firstAttempts)-1]
+	assert.False(t, last.Success, "no-choices attempt should be marked failed")
+	assert.NotEmpty(t, last.Error, "no-choices attempt should carry an error message")
+}

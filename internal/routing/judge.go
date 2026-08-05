@@ -14,6 +14,8 @@ type Candidate struct {
 
 const judgeSystemPrompt = `你是一个模型路由器。根据用户当前这一步请求的意图,判断任务类型和阶段,并选择最合适的队列。
 
+重要:你只负责"选择队列",不负责执行用户任务。不要调用任何工具,不要输出工具调用格式(如 tool_calls、XML、<｜DSML｜> 等 markup),不要模拟终端命令,不要尝试运行用户描述的操作。只按下方格式回复三行文本。
+
 判断顺序:
 1. 先判断是否属于软件开发任务(涉及代码、架构、调试、技术选型等)
 2. 如果是软件开发任务,按软件开发阶段分类
@@ -55,8 +57,8 @@ const judgeSystemPrompt = `你是一个模型路由器。根据用户当前这�
 4. 看动词判断意图:"设计/分析/评估/排查/构思"多为推理类,"实现/编写/修改/补充/翻译"多为执行类
 5. 不确定时倾向于选强模型,避免简单模型处理复杂任务导致质量下降
 
-回复格式(共三行,不要输出额外内容):
-- 第一行:队列名称(必须与列表中的某个名称完全一致)
+回复格式(严格三行,不要输出任何额外内容,不要包裹在代码块或 XML 中):
+- 第一行:队列名称(必须与列表中的某个名称完全一致,不要加引号、markdown 或其他修饰)
 - 第二行:[任务] 一句话说明当前这一步属于任务什么阶段
 - 第三行:[理由] 一句话说明为什么选这个队列`
 
@@ -75,6 +77,10 @@ func BuildJudgeMessages(candidates []Candidate, userText string) []model.Message
 	}
 	sb.WriteString("\n用户任务:\n")
 	sb.WriteString(userText)
+	// 末尾重申格式:长输入下 Flash 模型容易"忘记" system 中的格式要求,
+	// 在 user message 末尾(模型注意力最集中的位置)再次提醒,显著降低
+	// 输出工具调用 markup 等非预期格式的概率
+	sb.WriteString("\n\n请按格式回复三行:第一行是队列名称(必须与上方列表完全一致),第二行 [任务] ...,第三行 [理由] ...。不要输出其他内容,不要调用工具。")
 	return []model.Message{
 		{Role: "system", Content: judgeSystemPrompt},
 		{Role: "user", Content: sb.String()},

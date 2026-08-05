@@ -20,6 +20,15 @@ func TestBuildJudgeMessages(t *testing.T) {
 	assert.Contains(t, msgs[1].Content, "Write a haiku")
 }
 
+// TestBuildJudgeMessagesFormatReminder verifies the user message ends with a
+// format reminder so that judge models (especially Flash-tier) don't drift
+// into tool-call/markup hallucinations on long inputs.
+func TestBuildJudgeMessagesFormatReminder(t *testing.T) {
+	msgs := BuildJudgeMessages([]Candidate{{Name: "q1"}}, "hello")
+	assert.Contains(t, msgs[1].Content, "请按格式回复三行")
+	assert.Contains(t, msgs[1].Content, "不要调用工具")
+}
+
 func TestParseJudgeOutput(t *testing.T) {
 	cases := map[string]string{
 		"gpt-4o":               "gpt-4o",
