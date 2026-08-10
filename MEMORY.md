@@ -14,7 +14,7 @@
 
 - 版本变量在 `internal/version/version.go` 的 `Version` 字符串，默认值 `"dev"`（`go run` 或无 ldflags 构建时显示）
 - 编译时注入: `go build -ldflags "-X auto-router/internal/version.Version=v2026.08.02"`
-- `docker-push.sh` 构建时自动生成 `vYYYY.MM.DD` 日期版本号并通过 `--build-arg VERSION=` 传给 Dockerfile
+- `docker-push.sh` 构建时自动生成 `vYYYY.MM.DD` 日期版本号（CI 环境附加 commit 短哈希）并通过 `--build-arg VERSION=` 传给 Dockerfile。支持多架构(`linux/amd64,linux/arm64`) + 推送(`--push`)；用 `IMAGE_NAME` 环境变量指定仓库地址，`./docker-push.sh local` 可仅本地构建
 - 后端暴露 `GET /version` 接口返回 `{"version": "..."}`；前端 Layout.tsx 在挂载时 fetch 并显示在侧边栏品牌副标题 (`AI Gateway · v2026.08.02`)
 
 ## 项目结构
