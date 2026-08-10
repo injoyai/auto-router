@@ -106,6 +106,10 @@ export default function Logs() {
       render: (v: number) => formatLatency(v),
     },
     {
+      title: '重试', dataIndex: 'retry_count', key: 'retry_count', width: 60,
+      render: (v: number) => v > 0 ? <span style={{ color: '#f59e0b', fontWeight: 600 }}>{v}</span> : '-',
+    },
+    {
       title: '输入', dataIndex: 'prompt_tokens', key: 'prompt_tokens', width: 70,
       render: (v: number) => v > 0 ? v : '-',
     },
