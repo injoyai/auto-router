@@ -292,7 +292,7 @@ export default function Sources() {
               <Switch />
             </Form.Item>
             <Form.Item name="retry_max" label="重试次数" tooltip="失败后重试次数，0 表示不重试">
-              <InputNumber min={0} max={5} style={{ width: '100%' }} placeholder="0" />
+              <InputNumber min={0} style={{ width: '100%' }} placeholder="0" />
             </Form.Item>
             <Form.Item name="retry_backoff_ms" label="退避基数(ms)" tooltip="指数退避基数，如 500 -> 500ms/1s/2s">
               <InputNumber min={100} max={5000} step={100} style={{ width: '100%' }} placeholder="500" />

@@ -9,7 +9,7 @@ import (
 // ModelGroup 是对外可路由的具名队列,映射到一组有序 Model。
 type ModelGroup struct {
 	ID        uint      `gorm:"primaryKey" json:"id"`
-	Name      string    `gorm:"uniqueIndex;not null" json:"name"`
+	Name      string    `gorm:"uniqueIndex;not null;size:255" json:"name"`
 	Remark    string    `json:"remark"`
 	Enabled   bool      `gorm:"default:true" json:"enabled"`
 	CreatedAt time.Time `json:"created_at"`

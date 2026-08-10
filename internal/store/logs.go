@@ -155,16 +155,18 @@ func (s *Store) TokenStatsTotal() (int64, error) {
 // first match if a model name exists under multiple providers).
 func (s *Store) TokenStatsByModel() ([]TokenStatRow, error) {
 	var rows []TokenStatRow
-	err := s.DB.Table("request_logs").
-		Select(`COALESCE(NULLIF(served_model, ''), routed_model) as model,
-			(SELECT providers.name FROM models JOIN providers ON models.provider_id = providers.id WHERE models.name = COALESCE(NULLIF(served_model, ''), routed_model) LIMIT 1) as provider,
+	// 用子查询先将 model 表达式物化为列,外层 GROUP BY 该列。
+	// 避免直接 GROUP BY COALESCE(...) 时,SELECT 中的子查询引用 served_model
+	// 触发 MySQL only_full_group_by 报错(Error 1055)。
+	err := s.DB.Table("(SELECT COALESCE(NULLIF(served_model, ''), routed_model) as model, prompt_tokens, completion_tokens, total_tokens, cache_tokens FROM request_logs WHERE COALESCE(NULLIF(served_model, ''), routed_model) != '' AND total_tokens > 0) as t").
+		Select(`model,
+			(SELECT providers.name FROM models JOIN providers ON models.provider_id = providers.id WHERE models.name = model LIMIT 1) as provider,
 			count(*) as count,
 			sum(prompt_tokens) as prompt_tokens,
 			sum(completion_tokens) as completion_tokens,
 			sum(total_tokens) as total_tokens,
 			sum(cache_tokens) as cache_tokens`).
-		Where("COALESCE(NULLIF(served_model, ''), routed_model) != '' AND total_tokens > 0").
-		Group("COALESCE(NULLIF(served_model, ''), routed_model)").
+		Group("model").
 		Order("total_tokens desc").
 		Limit(10).
 		Scan(&rows).Error
