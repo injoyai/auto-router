@@ -144,14 +144,20 @@ var _ routing.JudgeClient = (*lazyJudge)(nil)
 
 // Judge 遍历判定队列链，逐模型解析 provider 并调用；首个成功（err==nil 且 raw != ""）
 // 即返回。全部失败时返回 "judge queue exhausted" 错误，引擎据此走兜底。
-func (l *lazyJudge) Judge(chain []*store.Model, candidates []routing.Candidate, userText string) (string, string, *model.Usage, []store.Attempt, error) {
+// onAttempt (if non-nil) is called after each judge model attempt, enabling
+// real-time trace updates.
+func (l *lazyJudge) Judge(chain []*store.Model, candidates []routing.Candidate, userText string, onAttempt func(store.Attempt)) (string, string, *model.Usage, []store.Attempt, error) {
 	var lastErr error
 	var trace []store.Attempt
 	for _, jm := range chain {
 		prov, err := l.st.GetProvider(jm.ProviderID)
 		if err != nil {
 			lastErr = err
-			trace = append(trace, store.Attempt{Type: "judge", Model: jm.Name, Error: err.Error()})
+			a := store.Attempt{Type: "judge", Model: jm.Name, Error: err.Error()}
+			trace = append(trace, a)
+			if onAttempt != nil {
+				onAttempt(a)
+			}
 			continue
 		}
 		apiKey, _ := store.Decrypt(l.key, prov.APIKey)
@@ -174,6 +180,12 @@ func (l *lazyJudge) Judge(chain []*store.Model, candidates []routing.Candidate, 
 			}
 		}
 		trace = append(trace, attempts...)
+		// Notify callback after each judge model's attempts are collected
+		if onAttempt != nil {
+			for _, a := range attempts {
+				onAttempt(a)
+			}
+		}
 		if err == nil && raw != "" {
 			return raw, jm.Name, usage, trace, nil
 		}

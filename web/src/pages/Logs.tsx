@@ -99,7 +99,10 @@ export default function Logs() {
     { title: '执行模型', dataIndex: 'routed_model', key: 'routed_model', width: 120 },
     {
       title: '状态', dataIndex: 'status', key: 'status', width: 70,
-      render: (v: number) => <span style={{ color: v < 400 ? '#10b981' : '#f43f5e', fontWeight: 600 }}>{v}</span>,
+      render: (v: number) => {
+        if (v === 0) return <Tag color="processing" style={{ margin: 0 }}>进行中</Tag>
+        return <span style={{ color: v < 400 ? '#10b981' : '#f43f5e', fontWeight: 600 }}>{v}</span>
+      },
     },
     {
       title: '耗时', dataIndex: 'latency_ms', key: 'latency_ms', width: 80,

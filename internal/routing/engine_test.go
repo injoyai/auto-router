@@ -43,7 +43,7 @@ type fakeJudge struct {
 	err error
 }
 
-func (fj *fakeJudge) Judge(chain []*store.Model, candidates []Candidate, userText string) (string, string, *model.Usage, []store.Attempt, error) {
+func (fj *fakeJudge) Judge(chain []*store.Model, candidates []Candidate, userText string, onAttempt func(store.Attempt)) (string, string, *model.Usage, []store.Attempt, error) {
 	served := ""
 	if len(chain) > 0 {
 		served = chain[0].Name
@@ -69,7 +69,7 @@ func newEngine() (*Engine, *fakeStore, *fakeJudge) {
 
 func TestRouteOverride(t *testing.T) {
 	e, _, _ := newEngine()
-	dec, err := e.Route(&model.ChatRequest{Override: "deepseek-v4-flash"})
+	dec, err := e.Route(&model.ChatRequest{Override: "deepseek-v4-flash"}, nil)
 	assert.NoError(t, err)
 	assert.Equal(t, "deepseek-v4-flash", dec.ModelName)
 	assert.Equal(t, "override", dec.Reason)
@@ -78,14 +78,14 @@ func TestRouteOverride(t *testing.T) {
 
 func TestRouteOverrideUnknownQueue(t *testing.T) {
 	e, _, _ := newEngine()
-	_, err := e.Route(&model.ChatRequest{Override: "no-such-queue"})
+	_, err := e.Route(&model.ChatRequest{Override: "no-such-queue"}, nil)
 	assert.Error(t, err)
 }
 
 func TestRouteJudge(t *testing.T) {
 	e, fs, _ := newEngine()
 	fs.judgeGroup = puint(8) // judge queue
-	dec, err := e.Route(&model.ChatRequest{Messages: []model.Message{{Role: "user", Content: "hi"}}})
+	dec, err := e.Route(&model.ChatRequest{Messages: []model.Message{{Role: "user", Content: "hi"}}}, nil)
 	assert.NoError(t, err)
 	assert.Equal(t, "deepseek-v4-flash", dec.ModelName)
 	assert.Equal(t, "judge", dec.Reason)
@@ -97,7 +97,7 @@ func TestRouteFallbackOnBadJudge(t *testing.T) {
 	fs.judgeGroup = puint(8)
 	fj.out = "nonexistent"
 	fs.defGroup = puint(7)
-	dec, err := e.Route(&model.ChatRequest{Messages: []model.Message{{Role: "user", Content: "hi"}}})
+	dec, err := e.Route(&model.ChatRequest{Messages: []model.Message{{Role: "user", Content: "hi"}}}, nil)
 	assert.NoError(t, err)
 	assert.Equal(t, "deepseek-v4-flash", dec.ModelName)
 	assert.Equal(t, "judge", dec.Reason)
@@ -113,7 +113,7 @@ func TestRouteOverrideMultiModelChainOrder(t *testing.T) {
 		chains: map[uint][]store.Model{8: {m1, m2}},
 	}
 	e := New(fs, &fakeJudge{})
-	dec, err := e.Route(&model.ChatRequest{Override: "multi-q"})
+	dec, err := e.Route(&model.ChatRequest{Override: "multi-q"}, nil)
 	assert.NoError(t, err)
 	assert.Equal(t, "multi-q", dec.ModelName)
 	assert.Len(t, dec.Models, 2)

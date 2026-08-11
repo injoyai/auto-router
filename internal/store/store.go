@@ -31,6 +31,8 @@ func Open(dialer Dialer, dsn string) (*Store, error) {
 	if err := migrateLegacyJudge(db); err != nil {
 		return nil, err
 	}
+	// Clean up stale in-progress logs (status=0) left by crashed/interrupted requests.
+	db.Where("status = 0").Delete(&RequestLog{})
 	return &Store{DB: db}, nil
 }
 

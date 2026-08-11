@@ -65,16 +65,67 @@ func (a *App) handleChat(c *gin.Context, clientFmt string, parseInbound func(map
 	}
 
 	start := time.Now()
-	dec, err := a.Engine.Route(req)
+
+	// allAttempts accumulates every attempt (judge + execution) for real-time
+	// trace updates. Judge attempts are appended via the onJudgeAttempt callback
+	// during Route(); execution attempts are appended in the model chain loop.
+	var allAttempts []store.Attempt
+
+	dec, err := a.Engine.Route(req, func(attempt store.Attempt) {
+		allAttempts = append(allAttempts, attempt)
+	})
 	if err != nil {
+		// Route failed - still create a log entry with the error and judge trace.
+		traceBytes, _ := json.Marshal(allAttempts)
+		_ = a.Store.CreateLog(&store.RequestLog{
+			SessionID:      req.SessionID,
+			ClientProtocol: req.ClientFmt,
+			RequestedModel: req.Model,
+			Status:         http.StatusServiceUnavailable,
+			LatencyMs:      time.Since(start).Milliseconds(),
+			Error:          err.Error(),
+			Trace:          string(traceBytes),
+		})
 		writeGatewayError(c, http.StatusServiceUnavailable, clientFmt, err.Error(), "router_error")
 		return
 	}
 
 	requestedModel := req.Model
 
+	// Create in-progress log entry (status=0) right after routing decision.
+	// Judge trace is already in allAttempts; execution trace will be appended
+	// in real-time, enabling manual refresh to observe chain progress.
+	logEntry := &store.RequestLog{
+		SessionID:      req.SessionID,
+		ClientProtocol: req.ClientFmt,
+		RequestedModel: requestedModel,
+		RoutedModel:    dec.ModelName,
+		RouteReason:    dec.Reason,
+		Status:         0, // in-progress
+		JudgeRaw:       dec.JudgeRaw,
+		JudgeModel:     dec.JudgeModel,
+		JudgeLatencyMs: dec.JudgeLatency.Milliseconds(),
+	}
+	if dec.JudgeUsage != nil {
+		logEntry.JudgePromptTokens = dec.JudgeUsage.PromptTokens
+		logEntry.JudgeCompletionTokens = dec.JudgeUsage.CompletionTokens
+		logEntry.JudgeTotalTokens = dec.JudgeUsage.TotalTokens
+		logEntry.JudgeCacheTokens = dec.JudgeUsage.CacheTokens
+	}
+	traceBytes, _ := json.Marshal(allAttempts)
+	logEntry.Trace = string(traceBytes)
+	_ = a.Store.CreateLog(logEntry)
+	logID := logEntry.ID
+
+	// flushTrace serializes current allAttempts and updates the log's trace
+	// field so the frontend can observe the chain growing on manual refresh.
+	flushTrace := func() {
+		tb, _ := json.Marshal(allAttempts)
+		_ = a.Store.UpdateLogTrace(logID, string(tb), dec.ServedModel)
+	}
+
 	if req.Stream {
-		a.streamResponse(c, dec, req, requestedModel, start)
+		a.streamResponse(c, dec, req, start, &allAttempts, logID, flushTrace)
 		return
 	}
 
@@ -85,13 +136,13 @@ func (a *App) handleChat(c *gin.Context, clientFmt string, parseInbound func(map
 	var resp *model.ChatResponse
 	var retryCount int
 	var lastErr error
-	var attempts []store.Attempt
 	for i, m := range dec.Models {
 		dec.ServedModel = m.Name
 		prov, perr := a.Store.GetProvider(m.ProviderID)
 		if perr != nil {
 			lastErr = fmt.Errorf("provider not found for model %s", m.Name)
-			attempts = append(attempts, store.Attempt{Model: m.Name, Error: lastErr.Error()})
+			allAttempts = append(allAttempts, store.Attempt{Model: m.Name, Error: lastErr.Error()})
+			flushTrace()
 			continue
 		}
 		apiKey, _ := store.Decrypt(a.CryptoKey, prov.APIKey)
@@ -105,11 +156,12 @@ func (a *App) handleChat(c *gin.Context, clientFmt string, parseInbound func(map
 		modelName := m.Name
 		provName := prov.Name
 		resp, retryCount, err = a.Dispatcher.CallWithRetry(c.Request.Context(), prov.BaseURL, apiKey, prov.Protocol, prov.ProxyURL, body, prov.RetryMax, prov.RetryBackoffMs, func(success bool, httpStatus int, e error, latencyMs int64) {
-			a := store.Attempt{Model: modelName, Provider: provName, Success: success, Status: httpStatus, LatencyMs: latencyMs}
+			at := store.Attempt{Model: modelName, Provider: provName, Success: success, Status: httpStatus, LatencyMs: latencyMs}
 			if e != nil {
-				a.Error = e.Error()
+				at.Error = e.Error()
 			}
-			attempts = append(attempts, a)
+			allAttempts = append(allAttempts, at)
+			flushTrace()
 		})
 		if err == nil {
 			dec.FailoverCount = i
@@ -134,9 +186,7 @@ func (a *App) handleChat(c *gin.Context, clientFmt string, parseInbound func(map
 	if resp != nil {
 		usage = &resp.Usage
 	}
-	allAttempts := append(dec.JudgeTrace, attempts...)
-	traceBytes, _ := json.Marshal(allAttempts)
-	a.writeLog(req, dec, requestedModel, status, time.Since(start), errMsg, retryCount, usage, string(traceBytes))
+	_ = a.Store.UpdateLogFinal(logID, status, time.Since(start).Milliseconds(), errMsg, retryCount, dec.ServedModel, dec.FailoverCount, usage, dec.JudgeRaw, dec.JudgeModel, dec.JudgeLatency.Milliseconds(), dec.JudgeUsage)
 }
 
 func (a *App) handleChatCompletions(c *gin.Context) {
@@ -147,7 +197,7 @@ func (a *App) handleMessages(c *gin.Context) {
 	a.handleChat(c, "claude", claude.ParseRequest)
 }
 
-func (a *App) streamResponse(c *gin.Context, dec *routing.Decision, req *model.ChatRequest, requestedModel string, start time.Time) {
+func (a *App) streamResponse(c *gin.Context, dec *routing.Decision, req *model.ChatRequest, start time.Time, allAttempts *[]store.Attempt, logID uint, flushTrace func()) {
 	c.Writer.Header().Set("Content-Type", "text/event-stream")
 	c.Writer.Header().Set("Cache-Control", "no-cache")
 	c.Writer.Header().Set("Connection", "keep-alive")
@@ -159,13 +209,13 @@ func (a *App) streamResponse(c *gin.Context, dec *routing.Decision, req *model.C
 	retryCount := 0
 	var lastErr error
 	succeeded := false
-	var attempts []store.Attempt
 	for i, m := range dec.Models {
 		dec.ServedModel = m.Name
 		prov, perr := a.Store.GetProvider(m.ProviderID)
 		if perr != nil {
 			lastErr = fmt.Errorf("provider not found for model %s", m.Name)
-			attempts = append(attempts, store.Attempt{Model: m.Name, Error: lastErr.Error()})
+			*allAttempts = append(*allAttempts, store.Attempt{Model: m.Name, Error: lastErr.Error()})
+			flushTrace()
 			continue
 		}
 		apiKey, _ := store.Decrypt(a.CryptoKey, prov.APIKey)
@@ -199,11 +249,12 @@ func (a *App) streamResponse(c *gin.Context, dec *routing.Decision, req *model.C
 			flusher.Flush()
 			return nil
 		}, func(success bool, httpStatus int, e error, latencyMs int64) {
-			a := store.Attempt{Model: modelName, Provider: provName, Success: success, Status: httpStatus, LatencyMs: latencyMs}
+			at := store.Attempt{Model: modelName, Provider: provName, Success: success, Status: httpStatus, LatencyMs: latencyMs}
 			if e != nil {
-				a.Error = e.Error()
+				at.Error = e.Error()
 			}
-			attempts = append(attempts, a)
+			*allAttempts = append(*allAttempts, at)
+			flushTrace()
 		})
 		retryCount = rc
 		if streamErr == nil {
@@ -223,51 +274,7 @@ func (a *App) streamResponse(c *gin.Context, dec *routing.Decision, req *model.C
 		errMsg = lastErr.Error()
 		writeGatewayError(c, status, req.ClientFmt, lastErr.Error(), "upstream_error")
 	}
-	allAttempts := append(dec.JudgeTrace, attempts...)
-	traceBytes, _ := json.Marshal(allAttempts)
-	a.writeLog(req, dec, requestedModel, status, time.Since(start), errMsg, retryCount, usage, string(traceBytes))
-}
-
-func (a *App) writeLog(req *model.ChatRequest, dec *routing.Decision, requestedModel string, status int, dur time.Duration, errMsg string, retryCount int, usage *model.Usage, trace string) {
-	var prompt, completion, total, cache int
-	if usage != nil {
-		prompt = usage.PromptTokens
-		completion = usage.CompletionTokens
-		total = usage.TotalTokens
-		cache = usage.CacheTokens
-	}
-	var jPrompt, jCompletion, jTotal, jCache int
-	if dec.JudgeUsage != nil {
-		jPrompt = dec.JudgeUsage.PromptTokens
-		jCompletion = dec.JudgeUsage.CompletionTokens
-		jTotal = dec.JudgeUsage.TotalTokens
-		jCache = dec.JudgeUsage.CacheTokens
-	}
-	_ = a.Store.CreateLog(&store.RequestLog{
-		SessionID:             req.SessionID,
-		ClientProtocol:        req.ClientFmt,
-		RequestedModel:        requestedModel,
-		RoutedModel:           dec.ModelName,
-		RouteReason:           dec.Reason,
-		JudgeRaw:              dec.JudgeRaw,
-		Status:                status,
-		LatencyMs:             dur.Milliseconds(),
-		Error:                 errMsg,
-		RetryCount:            retryCount,
-		ServedModel:           dec.ServedModel,
-		FailoverCount:         dec.FailoverCount,
-		Trace:                 trace,
-		PromptTokens:          prompt,
-		CompletionTokens:      completion,
-		TotalTokens:           total,
-		CacheTokens:           cache,
-		JudgeModel:            dec.JudgeModel,
-		JudgeLatencyMs:        dec.JudgeLatency.Milliseconds(),
-		JudgePromptTokens:     jPrompt,
-		JudgeCompletionTokens: jCompletion,
-		JudgeTotalTokens:      jTotal,
-		JudgeCacheTokens:      jCache,
-	})
+	_ = a.Store.UpdateLogFinal(logID, status, time.Since(start).Milliseconds(), errMsg, retryCount, dec.ServedModel, dec.FailoverCount, usage, dec.JudgeRaw, dec.JudgeModel, dec.JudgeLatency.Milliseconds(), dec.JudgeUsage)
 }
 
 func (a *App) handleListModels(c *gin.Context) {

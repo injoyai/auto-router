@@ -68,6 +68,7 @@ web/
 - `Attempt` 结构体: `Type`("judge"/"")、`Model`、`Provider`、`Success`、`Status`(HTTP状态码)、`Error`、`LatencyMs`
 - `LogWithProvider` 结构体用于 ListLogs JOIN 查询返回服务商名
 - Token 统计通过子查询关联 models+providers 解析服务商
+- **实时日志**: `Status=0` 表示进行中。路由完成后立即 `CreateLog(status=0)`，每次 attempt(判定+执行)通过 `UpdateLogTrace` 更新 Trace 字段，请求结束时 `UpdateLogFinal` 写入最终状态。前端 Logs.tsx 对 `status==0` 渲染蓝色「进行中」Tag。服务启动时自动清理 `status=0` 的残留记录
 
 ### RoutingConfig
 - `JudgeGroupID`, `DefaultGroupID`, `GatewayToken`
@@ -140,6 +141,7 @@ web/
 - `GET /version`: 返回 `{"version": "..."}`，版本号由编译时 ldflags 注入
 - `DELETE /admin/logs`: 清空所有请求日志（`store.ClearLogs()` 用 `DELETE FROM request_logs WHERE 1=1`，SQLite/MySQL 通用）
 - 已删除: `POST /admin/models/:id/judge`、`RoutingConfig.JudgeMaxInputChars` 相关字段/接口
+- **实时日志**: `JudgeClient.Judge` 接口增加 `onAttempt func(store.Attempt)` 回调参数;`Engine.Route` 增加 `onJudgeAttempt` 参数。`gateway.go` 移除 `writeLog`，改为 `CreateLog(status=0)` + `UpdateLogTrace`(每次 attempt) + `UpdateLogFinal`(终态)。`store.Open` 启动时清理 `status=0` 残留记录
 
 ## 前端规范
 

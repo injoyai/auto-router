@@ -29,8 +29,11 @@ var _ StoreDeps = (*store.Store)(nil)
 //   - usage:     token usage of the successful judge call (nil on failure)
 //   - trace:     per-model attempt history of the judge chain
 //   - err:       non-nil when the whole judge chain is exhausted
+//
+// onAttempt (if non-nil) is called after each individual judge model attempt,
+// enabling real-time trace updates before the full chain completes.
 type JudgeClient interface {
-	Judge(chain []*store.Model, candidates []Candidate, userText string) (raw string, servedModel string, usage *model.Usage, trace []store.Attempt, err error)
+	Judge(chain []*store.Model, candidates []Candidate, userText string, onAttempt func(store.Attempt)) (raw string, servedModel string, usage *model.Usage, trace []store.Attempt, err error)
 }
 
 type Decision struct {
@@ -84,7 +87,9 @@ func (e *Engine) resolveGroupChain(name string) ([]*store.Model, error) {
 }
 
 // Route decides which queue to use for the request.
-func (e *Engine) Route(req *model.ChatRequest) (*Decision, error) {
+// onJudgeAttempt (if non-nil) is called after each judge model attempt,
+// enabling real-time trace updates before the full judge chain completes.
+func (e *Engine) Route(req *model.ChatRequest, onJudgeAttempt func(store.Attempt)) (*Decision, error) {
 	// 1. Override: must be a queue name; miss -> error (no fallback)
 	if req.Override != "" {
 		chain, err := e.resolveGroupChain(req.Override)
@@ -132,7 +137,7 @@ func (e *Engine) Route(req *model.ChatRequest) (*Decision, error) {
 		}
 		userText := req.AllUserMessages()
 		jStart := time.Now()
-		raw, servedName, usage, jTrace, jerr := e.Judge.Judge(judgeChain, cands, userText)
+		raw, servedName, usage, jTrace, jerr := e.Judge.Judge(judgeChain, cands, userText, onJudgeAttempt)
 		judgeLatency = time.Since(jStart)
 		judgeUsage = usage
 		judgeName = servedName

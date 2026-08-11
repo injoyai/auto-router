@@ -1,6 +1,10 @@
 package store
 
-import "time"
+import (
+	"time"
+
+	"auto-router/internal/model"
+)
 
 // Attempt records one model attempt in the execution chain.
 type Attempt struct {
@@ -52,6 +56,43 @@ type LogWithProvider struct {
 
 func (s *Store) CreateLog(l *RequestLog) error {
 	return s.DB.Create(l).Error
+}
+
+// UpdateLogTrace updates the trace field (and served_model) of an existing log.
+// Used for real-time progress: each attempt appends to the trace so the frontend
+// can observe the chain growing before the request finishes.
+func (s *Store) UpdateLogTrace(id uint, trace, servedModel string) error {
+	return s.DB.Model(&RequestLog{}).Where("id = ?", id).
+		Updates(map[string]any{"trace": trace, "served_model": servedModel}).Error
+}
+
+// UpdateLogFinal writes the final state of a request log (status, latency,
+// error, retry count, token usage, judge diagnostics, served model, failover).
+func (s *Store) UpdateLogFinal(id uint, status int, latencyMs int64, errMsg string, retryCount int, servedModel string, failoverCount int, usage *model.Usage, judgeRaw, judgeModel string, judgeLatencyMs int64, judgeUsage *model.Usage) error {
+	updates := map[string]any{
+		"status":           status,
+		"latency_ms":       latencyMs,
+		"error":            errMsg,
+		"retry_count":      retryCount,
+		"served_model":     servedModel,
+		"failover_count":   failoverCount,
+		"judge_raw":        judgeRaw,
+		"judge_model":      judgeModel,
+		"judge_latency_ms": judgeLatencyMs,
+	}
+	if usage != nil {
+		updates["prompt_tokens"] = usage.PromptTokens
+		updates["completion_tokens"] = usage.CompletionTokens
+		updates["total_tokens"] = usage.TotalTokens
+		updates["cache_tokens"] = usage.CacheTokens
+	}
+	if judgeUsage != nil {
+		updates["judge_prompt_tokens"] = judgeUsage.PromptTokens
+		updates["judge_completion_tokens"] = judgeUsage.CompletionTokens
+		updates["judge_total_tokens"] = judgeUsage.TotalTokens
+		updates["judge_cache_tokens"] = judgeUsage.CacheTokens
+	}
+	return s.DB.Model(&RequestLog{}).Where("id = ?", id).Updates(updates).Error
 }
 
 // ClearLogs deletes all request log rows. SQLite/TRUNCATE 不兼容,用 DELETE 全表。
