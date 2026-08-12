@@ -5,6 +5,7 @@ import (
 	"crypto/subtle"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 	"time"
@@ -456,9 +457,18 @@ func (a *App) handleStats(c *gin.Context) {
 	var reasons []reasonCount
 	a.Store.DB.Model(&store.RequestLog{}).Select("route_reason as reason, count(*) as count").Group("route_reason").Scan(&reasons)
 
-	totalTokens, _ := a.Store.TokenStatsTotal()
-	byModel, _ := a.Store.TokenStatsByModel()
-	byProvider, _ := a.Store.TokenStatsByProvider()
+	totalTokens, err := a.Store.TokenStatsTotal()
+	if err != nil {
+		log.Printf("[WARN] stats: token total aggregation failed: %v", err)
+	}
+	byModel, err := a.Store.TokenStatsByModel()
+	if err != nil {
+		log.Printf("[WARN] stats: token by-model aggregation failed: %v", err)
+	}
+	byProvider, err := a.Store.TokenStatsByProvider()
+	if err != nil {
+		log.Printf("[WARN] stats: token by-provider aggregation failed: %v", err)
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"total":       total,
