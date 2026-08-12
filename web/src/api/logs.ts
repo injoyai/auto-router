@@ -23,6 +23,7 @@ export interface RequestLog {
   error: string
   retry_count: number
   served_model: string
+  served_provider: string
   failover_count: number
   trace: string
   prompt_tokens: number

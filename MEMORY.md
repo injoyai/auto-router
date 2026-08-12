@@ -61,14 +61,15 @@ web/
 - `ReplaceGroupItems` 整体替换，自动去重
 
 ### RequestLog
-- `ServedModel`: 实际执行的模型名; `RoutedModel`: 路由目标(队列名)
+- `ServedModel`: 实际执行的模型名; `ServedProvider`: 实际执行的服务商名（请求时记录，不依赖 JOIN 猜测）; `RoutedModel`: 路由目标(队列名)
 - Token 字段: `PromptTokens`/`CompletionTokens`/`TotalTokens`/`CacheTokens`（缓存命中）；判定调用另有 `JudgePromptTokens`/`JudgeCompletionTokens`/`JudgeTotalTokens`/`JudgeCacheTokens`
 - `CacheTokens` 来源: Claude `cache_read_input_tokens`，OpenAI `prompt_tokens_details.cached_tokens`
 - `Trace`: JSON 数组，存储完整请求链路（`[]Attempt`），包含判定尝试和执行模型尝试，每次重试独立一条
 - `Attempt` 结构体: `Type`("judge"/"")、`Model`、`Provider`、`Success`、`Status`(HTTP状态码)、`Error`、`LatencyMs`
-- `LogWithProvider` 结构体用于 ListLogs JOIN 查询返回服务商名
-- Token 统计通过子查询关联 models+providers 解析服务商
-- **实时日志**: `Status=0` 表示进行中。路由完成后立即 `CreateLog(status=0)`，每次 attempt(判定+执行)通过 `UpdateLogTrace` 更新 Trace 字段，请求结束时 `UpdateLogFinal` 写入最终状态。前端 Logs.tsx 对 `status==0` 渲染蓝色「进行中」Tag。服务启动时自动清理 `status=0` 的残留记录
+- `LogWithProvider` 结构体用于 ListLogs 返回服务商名
+- Token 统计: `TokenStatsByModel` 按 (model, provider) 分组，`TokenStatsByProvider` 按 provider 分组；均优先使用 `served_provider`（准确），旧日志回退到 models+providers 子查询
+- **同名模型多服务商问题**: 同一模型名可能存在于多个服务商下（如 GLM-5.2 同时在智谱和 opencode），MySQL 大小写不敏感导致 `GLM-5.2` = `glm-5.2`。不能通过 JOIN models 表确定实际服务商（会导致重复计数或随机选择）。解决方案：在 `RequestLog` 中直接存储 `served_provider`，由 gateway 在请求执行时填充
+- **实时日志**: `Status=0` 表示进行中。路由完成后立即 `CreateLog(status=0)`，每次 attempt(判定+执行)通过 `UpdateLogTrace` 更新 Trace + `served_model` + `served_provider` 字段，请求结束时 `UpdateLogFinal` 写入最终状态。前端 Logs.tsx 对 `status==0` 渲染蓝色「进行中」Tag。服务启动时自动清理 `status=0` 的残留记录
 
 ### RoutingConfig
 - `JudgeGroupID`, `DefaultGroupID`, `GatewayToken`
@@ -135,6 +136,7 @@ web/
 11. **判定链路 choices 为空**: 同 #10 的另一条路径。`defaultJudgeClient.Judge` 在 `len(resp.Choices)==0` 时返回 `err="judge returned no choices"`，但 `CallWithRetry` 的 `onAttempt` 已按 HTTP 层 err==nil 记录 `Success=true`。`lazyJudge` 原有的 `err==nil && raw==""` 分支不命中(err != nil)，不纠正 Success 标记，trace 同样出现"Success=true 却继续判定下一个"的假象。修复:将纠正逻辑推广为"只要 `err != nil` 且最后一次 attempt 仍为 `Success=true`，就统一标失败并补 Error"，覆盖 content 为空、choices 为空、以及未来可能的 HTTP 成功但判定语义失败的所有情况。修复见 `lazyJudge.Judge` 两个连续 `if` 块。典型特征:某次判定 200 + 耗时异常短(如 242ms 处理 7K+ token)却标记成功，链路却继续走下一个判定模型
 12. **判定请求 max_tokens 过小导致 empty content**: OpenAI 协议判定请求设 `max_tokens=200`(按"三行格式理论上 50~100 token"估算)后,所有判定都返回 `judge model X returned empty content`。实测 DeepSeek-V4-Flash 正常判定输出 300~600 token(带 [任务][理由] 描述),且部分服务商在 `max_tokens` 小于实际输出时返回 200 但 content 完全为空(非标准截断行为,标准 OpenAI 应返回部分内容 + `finish_reason=length`)。教训:不要用 `max_tokens` 来约束判定输出格式,应靠 system prompt + user message 末尾提醒;`max_tokens` 只在确知模型输出上限时设置。修复:移除 OpenAI 协议的 `max_tokens`,保留 `temperature=0`(该参数对所有服务商安全)
 13. **路由失败不记录日志**: `handleChat` 在 `Engine.Route` 返回错误时(如 judge queue exhausted),直接 `writeGatewayError` + `return`,不调用 `writeLog`。导致客户端(Trae 等)报 503 但 Logs 页面无任何记录,难以排查。修复:`writeLog` 改为支持 `dec == nil`(逐字段安全取值),路由失败时也调用 `writeLog` 记录 503 + 错误信息。典型现象:"Trae 报错但日志没有发现错误"
+14. **同名模型多服务商导致 Token 统计错乱**: 同一模型名(`deepseek-v4-flash`、`GLM-5.2`/`glm-5.2`)存在于多个服务商下时,通过 JOIN `models` 表解析服务商会产生严重问题:(a) `TokenStatsByProvider` 的 JOIN 匹配到多个服务商,每条日志被重复计数(522条变1042条);(b) `TokenStatsByModel` 的子查询 `LIMIT 1` 随机选一个服务商,opencode 永远没被选中。MySQL 大小写不敏感(`utf8mb4_general_ci`)使 `GLM-5.2` = `glm-5.2` 加剧了此问题。修复:在 `RequestLog` 增加 `ServedProvider` 字段,由 gateway 在请求执行时直接填充(此时已知确切服务商),统计查询优先使用该字段,旧日志通过 trace JSON 回填。`TokenStatsByModel` 改为按 (model, provider) 分组,避免歧义
 
 ## 后端 API 变更记录
 

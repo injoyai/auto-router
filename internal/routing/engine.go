@@ -42,6 +42,7 @@ type Decision struct {
 	Models        []*store.Model // ordered chain
 	Reason        string         // override | judge
 	ServedModel   string         // filled by gateway on success
+	ServedProvider string        // filled by gateway on success
 	FailoverCount int            // filled by gateway
 	JudgeTrace    []store.Attempt // filled by engine: judge attempts
 	JudgeRaw      string

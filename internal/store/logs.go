@@ -30,6 +30,7 @@ type RequestLog struct {
 	Error            string    `json:"error"`
 	RetryCount       int    `json:"retry_count"`
 	ServedModel      string `json:"served_model"`   // actually served model name (queue = the successful one)
+	ServedProvider   string `json:"served_provider"` // provider that actually served the request
 	FailoverCount    int    `json:"failover_count"` // queue failover count
 	Trace            string `json:"trace"`          // JSON array of Attempt, the full model queue attempt history
 	PromptTokens     int    `json:"prompt_tokens"`
@@ -58,23 +59,24 @@ func (s *Store) CreateLog(l *RequestLog) error {
 	return s.DB.Create(l).Error
 }
 
-// UpdateLogTrace updates the trace field (and served_model) of an existing log.
-// Used for real-time progress: each attempt appends to the trace so the frontend
-// can observe the chain growing before the request finishes.
-func (s *Store) UpdateLogTrace(id uint, trace, servedModel string) error {
+// UpdateLogTrace updates the trace field (and served_model/served_provider) of
+// an existing log. Used for real-time progress: each attempt appends to the
+// trace so the frontend can observe the chain growing before the request finishes.
+func (s *Store) UpdateLogTrace(id uint, trace, servedModel, servedProvider string) error {
 	return s.DB.Model(&RequestLog{}).Where("id = ?", id).
-		Updates(map[string]any{"trace": trace, "served_model": servedModel}).Error
+		Updates(map[string]any{"trace": trace, "served_model": servedModel, "served_provider": servedProvider}).Error
 }
 
 // UpdateLogFinal writes the final state of a request log (status, latency,
 // error, retry count, token usage, judge diagnostics, served model, failover).
-func (s *Store) UpdateLogFinal(id uint, status int, latencyMs int64, errMsg string, retryCount int, servedModel string, failoverCount int, usage *model.Usage, judgeRaw, judgeModel string, judgeLatencyMs int64, judgeUsage *model.Usage) error {
+func (s *Store) UpdateLogFinal(id uint, status int, latencyMs int64, errMsg string, retryCount int, servedModel, servedProvider string, failoverCount int, usage *model.Usage, judgeRaw, judgeModel string, judgeLatencyMs int64, judgeUsage *model.Usage) error {
 	updates := map[string]any{
 		"status":           status,
 		"latency_ms":       latencyMs,
 		"error":            errMsg,
 		"retry_count":      retryCount,
 		"served_model":     servedModel,
+		"served_provider":  servedProvider,
 		"failover_count":   failoverCount,
 		"judge_raw":        judgeRaw,
 		"judge_model":      judgeModel,
@@ -122,23 +124,26 @@ func (s *Store) ListLogs(page, pageSize int, reason, model string) ([]LogWithPro
 	if err != nil {
 		return logs, total, err
 	}
-	// 批量回填 provider_name：仅查本页涉及的去重模型名，最多 pageSize 条
+	// 回填 provider_name：优先使用 served_provider（准确，请求时记录），
+	// 对旧日志（served_provider 为空）回退到 models+providers 批量查询。
 	if len(logs) > 0 {
-		names := make(map[string]struct{})
-		for _, l := range logs {
-			n := l.ServedModel
-			if n == "" {
-				n = l.RoutedModel
-			}
-			if n != "" {
-				names[n] = struct{}{}
+		// Phase 1: 直接使用 served_provider
+		var needLookup []string
+		for i := range logs {
+			if logs[i].ServedProvider != "" {
+				logs[i].ProviderName = logs[i].ServedProvider
+			} else {
+				n := logs[i].ServedModel
+				if n == "" {
+					n = logs[i].RoutedModel
+				}
+				if n != "" {
+					needLookup = append(needLookup, n)
+				}
 			}
 		}
-		if len(names) > 0 {
-			list := make([]string, 0, len(names))
-			for n := range names {
-				list = append(list, n)
-			}
+		// Phase 2: 对没有 served_provider 的旧日志，按模型名批量查服务商
+		if len(needLookup) > 0 {
 			type row struct {
 				Name         string `gorm:"column:name"`
 				ProviderName string `gorm:"column:provider_name"`
@@ -147,7 +152,7 @@ func (s *Store) ListLogs(page, pageSize int, reason, model string) ([]LogWithPro
 			s.DB.Table("models").
 				Select("models.name, providers.name as provider_name").
 				Joins("LEFT JOIN providers ON models.provider_id = providers.id").
-				Where("models.name IN ?", list).
+				Where("models.name IN ?", needLookup).
 				Find(&rows)
 			m := make(map[string]string, len(rows))
 			for _, r := range rows {
@@ -156,6 +161,9 @@ func (s *Store) ListLogs(page, pageSize int, reason, model string) ([]LogWithPro
 				}
 			}
 			for i := range logs {
+				if logs[i].ProviderName != "" {
+					continue // already set from served_provider
+				}
 				n := logs[i].ServedModel
 				if n == "" {
 					n = logs[i].RoutedModel
@@ -187,45 +195,45 @@ func (s *Store) TokenStatsTotal() (int64, error) {
 	return total, err
 }
 
-// TokenStatsByModel aggregates token usage grouped by the model that actually
-// served the request (served_model, falling back to routed_model when
-// served_model is unset/NULL), ordered by total_tokens desc, limited to 10.
-// NULLIF is needed because GORM persists unset string fields as '' (not NULL),
-// which would otherwise prevent COALESCE from falling back to routed_model.
-// A correlated subquery resolves the provider name for each model (picks the
-// first match if a model name exists under multiple providers).
+// TokenStatsByModel aggregates token usage grouped by model + provider.
+// Grouping by both avoids ambiguity when the same model name exists under
+// multiple providers (e.g. "GLM-5.2" under both 智谱 and opencode).
+// served_provider is set at request time (accurate); for old logs without it,
+// falls back to a correlated subquery resolving provider by model name.
 func (s *Store) TokenStatsByModel() ([]TokenStatRow, error) {
 	var rows []TokenStatRow
-	// 用子查询先将 model 表达式物化为列,外层 GROUP BY 该列。
-	// 避免直接 GROUP BY COALESCE(...) 时,SELECT 中的子查询引用 served_model
-	// 触发 MySQL only_full_group_by 报错(Error 1055)。
-	err := s.DB.Table("(SELECT COALESCE(NULLIF(served_model, ''), routed_model) as model, prompt_tokens, completion_tokens, total_tokens, cache_tokens FROM request_logs WHERE COALESCE(NULLIF(served_model, ''), routed_model) != '' AND total_tokens > 0) as t").
+	err := s.DB.Table("(SELECT COALESCE(NULLIF(served_model, ''), routed_model) as model, COALESCE(NULLIF(served_provider, ''), (SELECT providers.name FROM models JOIN providers ON models.provider_id = providers.id WHERE models.name = COALESCE(NULLIF(served_model, ''), routed_model) LIMIT 1)) as provider, prompt_tokens, completion_tokens, total_tokens, cache_tokens FROM request_logs WHERE COALESCE(NULLIF(served_model, ''), routed_model) != '' AND total_tokens > 0) as t").
 		Select(`model,
-			(SELECT providers.name FROM models JOIN providers ON models.provider_id = providers.id WHERE models.name = model LIMIT 1) as provider,
+			provider,
 			count(*) as count,
 			sum(prompt_tokens) as prompt_tokens,
 			sum(completion_tokens) as completion_tokens,
 			sum(total_tokens) as total_tokens,
 			sum(cache_tokens) as cache_tokens`).
-		Group("model").
+		Where("provider != ''").
+		Group("model, provider").
 		Order("total_tokens desc").
 		Limit(10).
 		Scan(&rows).Error
 	return rows, err
 }
 
-// TokenStatsByProvider aggregates token usage grouped by provider name,
-// joining models+providers to resolve the provider name. The join uses the
-// model that actually served the request (served_model, falling back to
-// routed_model). Limited to 10.
+// TokenStatsByProvider aggregates token usage grouped by provider name.
+// Uses served_provider (accurate, set at request time) when available;
+// for old logs without served_provider, falls back to resolving via
+// models+providers JOIN subquery. No JOIN in the outer query avoids
+// double-counting when the same model name exists under multiple providers.
 func (s *Store) TokenStatsByProvider() ([]TokenStatRow, error) {
 	var rows []TokenStatRow
-	err := s.DB.Table("request_logs").
-		Select("providers.name as provider, count(*) as count, sum(request_logs.prompt_tokens) as prompt_tokens, sum(request_logs.completion_tokens) as completion_tokens, sum(request_logs.total_tokens) as total_tokens, sum(request_logs.cache_tokens) as cache_tokens").
-		Joins("LEFT JOIN models ON COALESCE(NULLIF(request_logs.served_model, ''), request_logs.routed_model) = models.name").
-		Joins("LEFT JOIN providers ON models.provider_id = providers.id").
-		Where("COALESCE(NULLIF(request_logs.served_model, ''), request_logs.routed_model) != '' AND request_logs.total_tokens > 0 AND providers.name != ''").
-		Group("providers.name").
+	err := s.DB.Table("(SELECT COALESCE(NULLIF(served_provider, ''), (SELECT providers.name FROM models JOIN providers ON models.provider_id = providers.id WHERE models.name = COALESCE(NULLIF(served_model, ''), routed_model) LIMIT 1)) as provider, prompt_tokens, completion_tokens, total_tokens, cache_tokens FROM request_logs WHERE COALESCE(NULLIF(served_model, ''), routed_model) != '' AND total_tokens > 0) as t").
+		Select(`provider,
+			count(*) as count,
+			sum(prompt_tokens) as prompt_tokens,
+			sum(completion_tokens) as completion_tokens,
+			sum(total_tokens) as total_tokens,
+			sum(cache_tokens) as cache_tokens`).
+		Where("provider != ''").
+		Group("provider").
 		Order("total_tokens desc").
 		Limit(10).
 		Scan(&rows).Error

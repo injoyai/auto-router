@@ -101,7 +101,7 @@ export default function Tokens() {
         <Table
           columns={modelColumns}
           dataSource={modelRows}
-          rowKey="model"
+          rowKey={(r) => `${r.model}-${r.provider}`}
           pagination={false}
           size="small"
           locale={{ emptyText: '暂无数据' }}

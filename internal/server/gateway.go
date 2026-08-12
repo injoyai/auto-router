@@ -121,7 +121,7 @@ func (a *App) handleChat(c *gin.Context, clientFmt string, parseInbound func(map
 	// field so the frontend can observe the chain growing on manual refresh.
 	flushTrace := func() {
 		tb, _ := json.Marshal(allAttempts)
-		_ = a.Store.UpdateLogTrace(logID, string(tb), dec.ServedModel)
+		_ = a.Store.UpdateLogTrace(logID, string(tb), dec.ServedModel, dec.ServedProvider)
 	}
 
 	if req.Stream {
@@ -145,6 +145,7 @@ func (a *App) handleChat(c *gin.Context, clientFmt string, parseInbound func(map
 			flushTrace()
 			continue
 		}
+		dec.ServedProvider = prov.Name
 		apiKey, _ := store.Decrypt(a.CryptoKey, prov.APIKey)
 		req.Model = m.Name
 		var body map[string]any
@@ -186,7 +187,7 @@ func (a *App) handleChat(c *gin.Context, clientFmt string, parseInbound func(map
 	if resp != nil {
 		usage = &resp.Usage
 	}
-	_ = a.Store.UpdateLogFinal(logID, status, time.Since(start).Milliseconds(), errMsg, retryCount, dec.ServedModel, dec.FailoverCount, usage, dec.JudgeRaw, dec.JudgeModel, dec.JudgeLatency.Milliseconds(), dec.JudgeUsage)
+	_ = a.Store.UpdateLogFinal(logID, status, time.Since(start).Milliseconds(), errMsg, retryCount, dec.ServedModel, dec.ServedProvider, dec.FailoverCount, usage, dec.JudgeRaw, dec.JudgeModel, dec.JudgeLatency.Milliseconds(), dec.JudgeUsage)
 }
 
 func (a *App) handleChatCompletions(c *gin.Context) {
@@ -218,6 +219,7 @@ func (a *App) streamResponse(c *gin.Context, dec *routing.Decision, req *model.C
 			flushTrace()
 			continue
 		}
+		dec.ServedProvider = prov.Name
 		apiKey, _ := store.Decrypt(a.CryptoKey, prov.APIKey)
 		req.Model = m.Name
 		var body map[string]any
@@ -274,7 +276,7 @@ func (a *App) streamResponse(c *gin.Context, dec *routing.Decision, req *model.C
 		errMsg = lastErr.Error()
 		writeGatewayError(c, status, req.ClientFmt, lastErr.Error(), "upstream_error")
 	}
-	_ = a.Store.UpdateLogFinal(logID, status, time.Since(start).Milliseconds(), errMsg, retryCount, dec.ServedModel, dec.FailoverCount, usage, dec.JudgeRaw, dec.JudgeModel, dec.JudgeLatency.Milliseconds(), dec.JudgeUsage)
+	_ = a.Store.UpdateLogFinal(logID, status, time.Since(start).Milliseconds(), errMsg, retryCount, dec.ServedModel, dec.ServedProvider, dec.FailoverCount, usage, dec.JudgeRaw, dec.JudgeModel, dec.JudgeLatency.Milliseconds(), dec.JudgeUsage)
 }
 
 func (a *App) handleListModels(c *gin.Context) {
