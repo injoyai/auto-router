@@ -111,7 +111,13 @@ func (s *Store) ListLogs(page, pageSize int, reason, model string) ([]LogWithPro
 		q = q.Where("request_logs.route_reason = ?", reason)
 	}
 	if model != "" {
-		q = q.Where("request_logs.routed_model = ?", model)
+		// MySQL 默认 collation 大小写不敏感，加 BINARY 强制区分；
+		// SQLite 的 = 本身区分大小写，无需处理。
+		if s.DB.Dialector.Name() == "mysql" {
+			q = q.Where("BINARY request_logs.routed_model = ?", model)
+		} else {
+			q = q.Where("request_logs.routed_model = ?", model)
+		}
 	}
 	q.Count(&total)
 	if page < 1 {

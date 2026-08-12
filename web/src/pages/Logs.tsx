@@ -148,13 +148,13 @@ export default function Logs() {
               { value: 'test', label: '测试模型' },
             ]}
           />
-          <Input.Search
+          <Input
             placeholder="模型名"
             allowClear
             style={{ width: 200 }}
             value={model}
             onChange={(e) => setModel(e.target.value)}
-            onSearch={handleSearch}
+            onPressEnter={handleSearch}
           />
           <Button type="primary" onClick={handleSearch}>查询</Button>
           <Button onClick={handleReset}>重置</Button>
