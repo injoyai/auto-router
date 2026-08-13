@@ -106,7 +106,7 @@ export default function Routing() {
           />
         </Space.Compact>
         <Text type="secondary" style={{ fontSize: 12, display: 'block', marginTop: 8 }}>
-          复制此地址填入第三方工具的 Base URL,工具会自动拼接 <Text code>/chat/completions</Text>(OpenAI)或 <Text code>/messages</Text>(Claude)端点
+          复制此地址填入第三方工具的 Base URL,工具会自动拼接 <Text code>/chat/completions</Text>(OpenAI Chat)或 <Text code>/messages</Text>(Anthropic Message)端点
         </Text>
 
         <div style={{ height: 1, background: 'var(--sand-100)', margin: '20px 0' }} />

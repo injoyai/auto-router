@@ -19,6 +19,7 @@ import {
 } from '../api/models'
 
 const protocolColors: Record<string, string> = { openai: 'blue', claude: 'purple' }
+const protocolNames: Record<string, string> = { openai: 'OpenAI Chat', claude: 'Anthropic Message' }
 
 export default function Sources() {
   const qc = useQueryClient()
@@ -228,7 +229,7 @@ export default function Sources() {
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span style={{ fontWeight: p.id === selectedProviderId ? 700 : 500 }}>{p.name}</span>
-                    <Tag color={protocolColors[p.protocol] ?? 'default'} style={{ marginRight: 0 }}>{p.protocol}</Tag>
+                    <Tag color={protocolColors[p.protocol] ?? 'default'} style={{ marginRight: 0 }}>{protocolNames[p.protocol] ?? p.protocol}</Tag>
                   </div>
                   <Space size="small" style={{ marginTop: 4 }} onClick={(e) => e.stopPropagation()}>
                     <Button size="small" type="link" style={{ padding: 0 }} onClick={() => openEditProv(p)}>编辑</Button>
@@ -283,7 +284,7 @@ export default function Sources() {
               <Input.Password placeholder="请输入密钥" autoComplete="new-password" />
             </Form.Item>
             <Form.Item name="protocol" label="协议" rules={[{ required: true }]}>
-              <Select options={[{ value: 'openai', label: 'OpenAI' }, { value: 'claude', label: 'Claude' }]} />
+              <Select options={[{ value: 'openai', label: 'OpenAI Chat' }, { value: 'claude', label: 'Anthropic Message' }]} />
             </Form.Item>
             <Form.Item name="proxy_url" label="代理地址" tooltip="可选，设置后通过该 HTTP/HTTPS 代理请求上游 API，方便访问海外源">
               <Input placeholder="http://127.0.0.1:7890" />
