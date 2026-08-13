@@ -137,6 +137,8 @@ web/
 12. **判定请求 max_tokens 过小导致 empty content**: OpenAI 协议判定请求设 `max_tokens=200`(按"三行格式理论上 50~100 token"估算)后,所有判定都返回 `judge model X returned empty content`。实测 DeepSeek-V4-Flash 正常判定输出 300~600 token(带 [任务][理由] 描述),且部分服务商在 `max_tokens` 小于实际输出时返回 200 但 content 完全为空(非标准截断行为,标准 OpenAI 应返回部分内容 + `finish_reason=length`)。教训:不要用 `max_tokens` 来约束判定输出格式,应靠 system prompt + user message 末尾提醒;`max_tokens` 只在确知模型输出上限时设置。修复:移除 OpenAI 协议的 `max_tokens`,保留 `temperature=0`(该参数对所有服务商安全)
 13. **路由失败不记录日志**: `handleChat` 在 `Engine.Route` 返回错误时(如 judge queue exhausted),直接 `writeGatewayError` + `return`,不调用 `writeLog`。导致客户端(Trae 等)报 503 但 Logs 页面无任何记录,难以排查。修复:`writeLog` 改为支持 `dec == nil`(逐字段安全取值),路由失败时也调用 `writeLog` 记录 503 + 错误信息。典型现象:"Trae 报错但日志没有发现错误"
 14. **同名模型多服务商导致 Token 统计错乱**: 同一模型名(`deepseek-v4-flash`、`GLM-5.2`/`glm-5.2`)存在于多个服务商下时,通过 JOIN `models` 表解析服务商会产生严重问题:(a) `TokenStatsByProvider` 的 JOIN 匹配到多个服务商,每条日志被重复计数(522条变1042条);(b) `TokenStatsByModel` 的子查询 `LIMIT 1` 随机选一个服务商,opencode 永远没被选中。MySQL 大小写不敏感(`utf8mb4_general_ci`)使 `GLM-5.2` = `glm-5.2` 加剧了此问题。修复:在 `RequestLog` 增加 `ServedProvider` 字段,由 gateway 在请求执行时直接填充(此时已知确切服务商),统计查询优先使用该字段,旧日志通过 trace JSON 回填。`TokenStatsByModel` 改为按 (model, provider) 分组,避免歧义
+15. **DailyUsageStats 未聚合导致空数据/request_count 恒为 0**: 初版 `DailyUsageStats` SELECT 了原始列(`served_provider`/`served_model`/`prompt_tokens` 等)却只 `Group("date")`，没有 `SUM`/`COUNT`。后果:(a) MySQL `only_full_group_by` 下报 1055 错误，`handleDailyStats` 记 WARN 后返回空数组，图表显示「暂无数据」;(b) 即使 SQLite 不报错，返回的也是 GROUP BY 下任意行的 token 原始值而非每日合计，`request_count` 永远为 0。修复:物化内层子查询解析 `DATE(created_at)`/`served_model`/`served_provider` 并应用过滤，外层 `Table("(?) as t", inner)` 再 `count(*)` + `sum(...)` 按 `date` 聚合。新增 `TestDailyUsageStats` 覆盖无过滤/按 provider/按 model 三种场景
+16. **MySQL `DATE(created_at)` 扫描成 time.Time 导致日期变 RFC3339**: GORM 的 MySQL 驱动默认 `parseTime=true`，`DATE(created_at)` 返回的 DATE 类型会被驱动解析成 `time.Time`，再 Scan 到 `DailyUsageRow.Date`/`DailyUsageByModelRow.Date` 的 string 字段时被 `database/sql` 格式化为 RFC3339（如 `2026-08-13T00:00:00Z`），前端柱状图 x 轴因此显示错误格式。修复:抽出 `dailyDateExpr()`——MySQL 用 `DATE_FORMAT(created_at, '%Y-%m-%d')` 强制输出纯字符串，SQLite 用 `date(created_at)`（本就返回 TEXT `YYYY-MM-DD`）。`DailyUsageStats` 与 `DailyUsageStatsByModel` 均改用它
 
 ## 后端 API 变更记录
 
@@ -144,6 +146,10 @@ web/
 - `DELETE /admin/logs`: 清空所有请求日志（`store.ClearLogs()` 用 `DELETE FROM request_logs WHERE 1=1`，SQLite/MySQL 通用）
 - 已删除: `POST /admin/models/:id/judge`、`RoutingConfig.JudgeMaxInputChars` 相关字段/接口
 - **实时日志**: `JudgeClient.Judge` 接口增加 `onAttempt func(store.Attempt)` 回调参数;`Engine.Route` 增加 `onJudgeAttempt` 参数。`gateway.go` 移除 `writeLog`，改为 `CreateLog(status=0)` + `UpdateLogTrace`(每次 attempt) + `UpdateLogFinal`(终态)。`store.Open` 启动时清理 `status=0` 残留记录
+- **handleStats 错误日志**: `admin.go` 的 `handleStats` 中 `TokenStatsTotal`/`TokenStatsByModel`/`TokenStatsByProvider` 三个聚合查询的错误不再静默丢弃(`_ =`)，改为 `log.Printf("[WARN] stats: ...")` 记录，便于排查统计为空的原因
+- **ListLogs 模型名搜索区分大小写**: MySQL 默认 collation(`utf8mb4_general_ci`) 大小写不敏感，`ListLogs` 的模型过滤加 `BINARY` 关键字强制区分(`BINARY request_logs.routed_model = ?`)；SQLite 的 `=` 本身区分大小写，无需处理。通过 `s.DB.Dialector.Name() == "mysql"` 判断驱动
+- **用量趋势 API**: `GET /admin/stats/daily?provider=&model=&days=30` 返回按天聚合的 token 用量（`DailyUsageRow` 含 date/request_count/prompt_tokens/completion_tokens/total_tokens/cache_tokens）。store 方法 `DailyUsageStats(provider, model, days)` 先物化子查询（`DATE(created_at)` + 解析 `served_model`/`served_provider` + 过滤），再在 `(?) as t` 外层做 `count(*)` 与 `sum(...)` 聚合，支持 `served_provider` 和模型名过滤
+- **用量趋势按模型 API**: `GET /admin/stats/daily/models?provider=&model=&days=30` 返回按 (date, model, provider) 聚合的数据（`DailyUsageByModelRow` 在 `DailyUsageRow` 基础上多 `model` 和 `provider` 字段），供堆叠柱状图使用（tooltip 需显示供应商，同名模型可存在于多供应商下）。store 方法 `DailyUsageStatsByModel(provider, model, days)` 与 `DailyUsageStats` 共享子查询构造，仅外层 `Group("date, model, provider")` 不同
 
 ## 前端规范
 
@@ -153,6 +159,8 @@ web/
 - **Queues.tsx 表单提示**: 名称和能力说明的提示文本通过 `Form.Item` 的 `extra` 属性显示(灰色 12px)，不使用 tooltip
 - **Logs.tsx 列顺序**: 时间 -> 请求模型 -> 路由类型 -> 供应商 -> 执行模型 -> 状态 -> 耗时 -> 输入 -> 输出 -> 缓存命中 -> 错误；原「模型队列」列已改名为「执行模型」，并在其前新增「供应商」列(provider_name 字段，由后端 LogWithProvider JOIN providers 表回填)；工具栏右侧有「清空日志」按钮(danger 风格，带确认弹窗)
 - **Logs.tsx 展开行 Token 显示**: 使用「输入/输出/缓存命中」格式（原「提示/补全/合计」已替换）；主请求和判定调用各显示一组；所有行均可展开
+- **Logs.tsx 模型名搜索框**: 使用 `Input`（非 `Input.Search`），避免自带搜索图标按钮与旁边"查询"按钮重复；回车通过 `onPressEnter` 触发搜索
+- **UsageTrend.tsx**: 用量趋势页，堆叠柱状图 `Column`（`@ant-design/charts`）展示每日 token 消耗，每个柱子按 `model+provider` 叠加（`seriesField: 'key'` + `isStack: true`，`key` 由 `modelKey(model, provider)` 生成 `模型 · 供应商`）；tooltip 用 `customContent` 自定义显示模型+供应商+千分位(`formatThousands`，`toLocaleString`)；筛选区服务商下拉 + 模型下拉（模型下拉 `value` 用 `model.id` 避免同名模型重复，label 未选供应商时带 `(供应商名)`，选了供应商只显示该供应商模型）；时间范围(7/14/30/90天)、指标切换(总Token/输入/输出/请求数/缓存命中)；统计卡片走 `/stats/daily`，图表走 `/stats/daily/models`；x 轴日期显示 `YYYY-MM-DD`（后端 `DATE_FORMAT`/`date(created_at)` 返回，`autoRotate`/`autoHide` 防重叠）；前端用 `formatDate` 生成近 `days` 天完整日期序列，并为每个日期×系列生成数据点（无数据的系列补 0 值，即「稠密数据点」），保证无数据的天在 x 轴占据空位、且图例筛选某个系列后空日期也不会消失（若用单一 fallback 占位点会随该系列被筛选而丢失日期位置）
 
 ## 构建命令
 
@@ -182,6 +190,7 @@ docker build -t auto-router .
 | `/queues` | Queues | 模型队列(含拖拽排序) |
 | `/routing` | Routing | 路由配置(判定队列/兜底队列/API Key 可编辑+随机生成) |
 | `/tokens` | Tokens | Token 统计 |
+| `/usage-trend` | UsageTrend | 用量趋势(每日折线图) |
 | `/logs` | Logs | 请求日志(含服务商列) |
 | `/login` | Login | 登录页 |
 

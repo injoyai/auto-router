@@ -86,3 +86,39 @@ export async function getStats(): Promise<Stats> {
   const { data } = await apiClient.get('/admin/stats')
   return data
 }
+
+export interface DailyUsageRow {
+  date: string
+  request_count: number
+  prompt_tokens: number
+  completion_tokens: number
+  total_tokens: number
+  cache_tokens: number
+}
+
+export interface DailyStatsParams {
+  provider?: string
+  model?: string
+  days?: number
+}
+
+export async function getDailyStats(params: DailyStatsParams): Promise<DailyUsageRow[]> {
+  const { data } = await apiClient.get('/admin/stats/daily', { params })
+  return data.data
+}
+
+export interface DailyUsageByModelRow {
+  date: string
+  model: string
+  provider: string
+  request_count: number
+  prompt_tokens: number
+  completion_tokens: number
+  total_tokens: number
+  cache_tokens: number
+}
+
+export async function getDailyStatsByModel(params: DailyStatsParams): Promise<DailyUsageByModelRow[]> {
+  const { data } = await apiClient.get('/admin/stats/daily/models', { params })
+  return data.data
+}

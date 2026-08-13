@@ -9,6 +9,7 @@ import {
   ThunderboltFilled,
   FireOutlined,
   UnorderedListOutlined,
+  LineChartOutlined,
 } from '@ant-design/icons'
 import { useEffect, useState } from 'react'
 
@@ -23,6 +24,7 @@ const menuItems = [
   { key: '/routing', icon: <SettingOutlined />, label: '路由配置' },
   { key: '/logs', icon: <FileTextOutlined />, label: '请求日志' },
   { key: '/tokens', icon: <FireOutlined />, label: 'Token 统计' },
+  { key: '/usage-trend', icon: <LineChartOutlined />, label: '用量趋势' },
   { type: 'divider' as const, className: 'aurora-menu-divider' },
   { key: LOGOUT_KEY, icon: <LogoutOutlined />, label: '退出登录', danger: true, className: 'aurora-menu-logout' },
 ]

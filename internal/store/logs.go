@@ -245,3 +245,94 @@ func (s *Store) TokenStatsByProvider() ([]TokenStatRow, error) {
 		Scan(&rows).Error
 	return rows, err
 }
+
+// DailyUsageRow is one day's aggregated usage.
+type DailyUsageRow struct {
+	Date             string `json:"date"`
+	RequestCount     int64  `json:"request_count"`
+	PromptTokens     int64  `json:"prompt_tokens"`
+	CompletionTokens int64  `json:"completion_tokens"`
+	TotalTokens      int64  `json:"total_tokens"`
+	CacheTokens      int64  `json:"cache_tokens"`
+}
+
+// dailyDateExpr returns a SQL expression that formats created_at as a plain
+// YYYY-MM-DD string. MySQL's DATE() returns a DATE type that the driver scans
+// as time.Time (RFC3339 when read into a string), so use DATE_FORMAT there;
+// SQLite's date() already returns a TEXT YYYY-MM-DD.
+func (s *Store) dailyDateExpr() string {
+	if s.DB.Dialector.Name() == "mysql" {
+		return "DATE_FORMAT(created_at, '%Y-%m-%d')"
+	}
+	return "date(created_at)"
+}
+
+// DailyUsageStats returns daily aggregated token usage for the given number of
+// days, optionally filtered by provider (served_provider) and model
+// (served_model, falling back to routed_model). It materializes a subquery that
+// resolves the effective model/provider per row and applies the filters, then
+// aggregates (COUNT + SUM) over it in the outer query — this avoids MySQL
+// only_full_group_by issues caused by grouping on DATE()/COALESCE() expressions.
+func (s *Store) DailyUsageStats(provider, model string, days int) ([]DailyUsageRow, error) {
+	startDate := time.Now().AddDate(0, 0, -days).Format("2006-01-02")
+	inner := s.DB.Table("request_logs").
+		Select(s.dailyDateExpr() + " as date, COALESCE(NULLIF(served_model, ''), routed_model) as model, served_provider as provider, prompt_tokens, completion_tokens, total_tokens, cache_tokens").
+		Where("created_at >= ? AND total_tokens > 0", startDate)
+	if provider != "" {
+		inner = inner.Where("served_provider = ?", provider)
+	}
+	if model != "" {
+		if s.DB.Dialector.Name() == "mysql" {
+			inner = inner.Where("BINARY COALESCE(NULLIF(served_model, ''), routed_model) = ?", model)
+		} else {
+			inner = inner.Where("COALESCE(NULLIF(served_model, ''), routed_model) = ?", model)
+		}
+	}
+	var rows []DailyUsageRow
+	err := s.DB.Table("(?) as t", inner).
+		Select("date, count(*) as request_count, sum(prompt_tokens) as prompt_tokens, sum(completion_tokens) as completion_tokens, sum(total_tokens) as total_tokens, sum(cache_tokens) as cache_tokens").
+		Group("date").
+		Order("date asc").
+		Scan(&rows).Error
+	return rows, err
+}
+
+// DailyUsageByModelRow is one day's aggregated usage for a single model.
+type DailyUsageByModelRow struct {
+	Date             string `json:"date"`
+	Model            string `json:"model"`
+	Provider         string `json:"provider"`
+	RequestCount     int64  `json:"request_count"`
+	PromptTokens     int64  `json:"prompt_tokens"`
+	CompletionTokens int64  `json:"completion_tokens"`
+	TotalTokens      int64  `json:"total_tokens"`
+	CacheTokens      int64  `json:"cache_tokens"`
+}
+
+// DailyUsageStatsByModel aggregates daily usage grouped by (date, model,
+// provider), used by the stacked column chart in the usage trend page. Provider
+// is included so the chart tooltip can show which provider served each model
+// segment (the same model name may exist under multiple providers).
+func (s *Store) DailyUsageStatsByModel(provider, model string, days int) ([]DailyUsageByModelRow, error) {
+	startDate := time.Now().AddDate(0, 0, -days).Format("2006-01-02")
+	inner := s.DB.Table("request_logs").
+		Select(s.dailyDateExpr() + " as date, COALESCE(NULLIF(served_model, ''), routed_model) as model, served_provider as provider, prompt_tokens, completion_tokens, total_tokens, cache_tokens").
+		Where("created_at >= ? AND total_tokens > 0", startDate)
+	if provider != "" {
+		inner = inner.Where("served_provider = ?", provider)
+	}
+	if model != "" {
+		if s.DB.Dialector.Name() == "mysql" {
+			inner = inner.Where("BINARY COALESCE(NULLIF(served_model, ''), routed_model) = ?", model)
+		} else {
+			inner = inner.Where("COALESCE(NULLIF(served_model, ''), routed_model) = ?", model)
+		}
+	}
+	var rows []DailyUsageByModelRow
+	err := s.DB.Table("(?) as t", inner).
+		Select("date, model, provider, count(*) as request_count, sum(prompt_tokens) as prompt_tokens, sum(completion_tokens) as completion_tokens, sum(total_tokens) as total_tokens, sum(cache_tokens) as cache_tokens").
+		Group("date, model, provider").
+		Order("date asc, total_tokens desc").
+		Scan(&rows).Error
+	return rows, err
+}

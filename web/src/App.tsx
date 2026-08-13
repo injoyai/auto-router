@@ -7,6 +7,7 @@ import Queues from './pages/Queues'
 import Routing from './pages/Routing'
 import Logs from './pages/Logs'
 import Tokens from './pages/Tokens'
+import UsageTrend from './pages/UsageTrend'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const token = localStorage.getItem('admin_jwt')
@@ -32,6 +33,7 @@ export default function App() {
         <Route path="routing" element={<Routing />} />
         <Route path="logs" element={<Logs />} />
         <Route path="tokens" element={<Tokens />} />
+        <Route path="usage-trend" element={<UsageTrend />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
