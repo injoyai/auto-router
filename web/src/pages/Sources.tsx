@@ -19,7 +19,7 @@ import {
 } from '../api/models'
 
 const protocolColors: Record<string, string> = { openai: 'blue', claude: 'purple' }
-const protocolNames: Record<string, string> = { openai: 'OpenAI Chat', claude: 'Anthropic Message' }
+const protocolNames: Record<string, string> = { openai: 'OpenAI', claude: 'Anthropic' }
 
 export default function Sources() {
   const qc = useQueryClient()
