@@ -267,7 +267,7 @@ export default function UsageTrend() {
         </Col>
       </Row>
 
-      <Card title="每日用量趋势" className="aurora-card aurora-chart-card">
+      <Card title="每日用量趋势" className="aurora-card aurora-chart-card usage-trend-card">
         <Space style={{ marginBottom: 16 }}>
           <span style={{ fontSize: 13, color: '#8a7f66' }}>指标：</span>
           <Radio.Group value={metric} onChange={(e) => setMetric(e.target.value)} size="small">

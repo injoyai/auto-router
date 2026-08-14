@@ -780,6 +780,11 @@ h1, h2, h3, h4, h5, h6 {
   z-index: 1;
 }
 
+/* 用量趋势柱状图：禁用居中光晕装饰（柱状图背景下中心绿点太突兀） */
+.usage-trend-card .ant-card-body::before {
+  display: none;
+}
+
 /* 图例项 hover 微交互 */
 .aurora-chart-card .antv-chart-legend-item {
   transition: all 0.2s ease !important;
