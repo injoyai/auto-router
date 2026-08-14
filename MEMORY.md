@@ -155,6 +155,7 @@ web/
 
 - **菜单命名**: 「上游模型」(原「模型管理」，Layout.tsx)；页面标题 Sources.tsx 内仍为「模型管理」
 - **协议显示名**: 服务商协议仅做显示名映射（`protocolNames = { openai: 'OpenAI', claude: 'Anthropic' }`，Sources.tsx 列表标签、Routing.tsx 请求地址提示文案用该名；新建/编辑供应商的协议下拉选项为硬编码「OpenAI Chat」「Anthropic Message」）；底层存储值仍是小写 `openai`/`claude`，后端判断依赖它，勿改存储值
+- **复制剪贴板**: `navigator.clipboard` 仅在安全上下文(HTTPS/localhost)可用。管理员常通过局域网 IP(http://192.168.x.x)访问，此时它不存在会抛异常、且 writeText 的 Promise 被拒时也没有反馈，导致「路由配置」页复制(请求地址/模型名/API Key)看起来无效。Routing.tsx 的 `copyText` 已改为：优先 clipboard，不可用或被拒时回退 `document.execCommand('copy')`(隐藏 textarea 方案)，成功与否都有明确 message 反馈
 - **退出登录按钮**: 位于侧边栏底部，与分隔线之间 6px 间距；分隔线为渐变样式(两端淡中间实)
 - **Token 数量显示**: 自动切换单位 (<1K 显示原值, 1K~1M 显示 x.xk, 1M~1B 显示 x.xM, ≥1B 显示 x.xB)，覆盖 Dashboard 统计卡片、饼图、Token 统计页
 - **Queues.tsx 表单提示**: 名称和能力说明的提示文本通过 `Form.Item` 的 `extra` 属性显示(灰色 12px)，不使用 tooltip

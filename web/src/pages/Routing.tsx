@@ -71,9 +71,38 @@ export default function Routing() {
   const groupOptions = enabledGroups.map((g) => ({ value: g.id, label: g.name }))
   const baseUrl = window.location.origin + '/v1'
 
+  // 复制到剪贴板：优先 navigator.clipboard（HTTPS/localhost），非安全上下文或失败时
+  // 回退到 document.execCommand('copy')（textarea 选中复制），避免局域网 IP 访问时无效
   const copyText = (text: string, label: string) => {
-    navigator.clipboard.writeText(text)
-    message.success(`${label}已复制`)
+    const fallback = () => {
+      const ta = document.createElement('textarea')
+      ta.value = text
+      ta.style.position = 'fixed'
+      ta.style.opacity = '0'
+      document.body.appendChild(ta)
+      ta.select()
+      let ok = false
+      try {
+        ok = document.execCommand('copy')
+      } catch {
+        ok = false
+      }
+      document.body.removeChild(ta)
+      if (ok) {
+        message.success(`${label}已复制`)
+      } else {
+        message.error(`${label}复制失败`)
+      }
+    }
+
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(text).then(
+        () => message.success(`${label}已复制`),
+        () => fallback(),
+      )
+    } else {
+      fallback()
+    }
   }
 
   // 可用模型名称列表（含 auto）- 对外暴露的是队列名
