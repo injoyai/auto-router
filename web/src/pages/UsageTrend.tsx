@@ -145,6 +145,8 @@ export default function UsageTrend() {
         if (!items || items.length === 0) {
           return `<div style="font-weight:700;color:#1f1a12;">${title}</div>`
         }
+        // 当天所有系列的汇总用量
+        const dayTotal = items.reduce((s: number, it: any) => s + (it.data?.value ?? 0), 0)
         const body = items.map((it: any) => {
           const d = it.data ?? {}
           const label = d.provider ? `${d.model} · ${d.provider}` : (d.model || '未知')
@@ -156,7 +158,7 @@ export default function UsageTrend() {
               <span style="margin-left:auto;font-weight:700;color:#1f1a12;font-family:'Bricolage Grotesque',sans-serif;">${formatThousands(d.value ?? 0)}</span>
             </div>`
         }).join('')
-        return `<div style="font-weight:700;color:#1f1a12;margin-bottom:4px;">${title}</div>${body}`
+        return `<div style="font-weight:700;color:#1f1a12;margin-bottom:4px;">${title}</div>${body}<div style="display:flex;align-items:center;gap:8px;padding:4px 0 0;min-width:200px;border-top:1px dashed rgba(106,96,76,0.25);margin-top:4px;"><span style="color:#3a6b4d;font-weight:700;">汇总</span><span style="margin-left:auto;font-weight:700;color:#3a6b4d;font-family:'Bricolage Grotesque',sans-serif;">${formatThousands(dayTotal)}</span></div>`
       },
       domStyles: {
         'g2-tooltip': {
