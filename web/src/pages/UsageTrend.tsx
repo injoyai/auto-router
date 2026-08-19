@@ -3,7 +3,7 @@ import { FireOutlined, ThunderboltOutlined, CheckCircleOutlined, DatabaseOutline
 import { useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 import { Column, ColumnConfig } from '@ant-design/charts'
-import { getDailyStats, getDailyStatsByModel } from '../api/logs'
+import { getDailyStats, getDailyStatsByModel, getDailyStatsByQueue } from '../api/logs'
 import { listProviders } from '../api/providers'
 import { listModels } from '../api/models'
 
@@ -37,8 +37,6 @@ const formatDate = (d: Date) => {
   return `${y}-${m}-${day}`
 }
 
-const modelKey = (model: string, provider: string) => (provider ? `${model} · ${provider}` : model)
-
 type Metric = 'total_tokens' | 'prompt_tokens' | 'completion_tokens' | 'request_count' | 'cache_tokens'
 
 const metricLabels: Record<Metric, string> = {
@@ -49,11 +47,33 @@ const metricLabels: Record<Metric, string> = {
   cache_tokens: '缓存命中',
 }
 
+// 图表分组模式：queue = 按模型队列名（routed_model），model = 按模型+服务商
+type GroupBy = 'queue' | 'model'
+
+const groupByLabels: Record<GroupBy, string> = {
+  queue: '按队列',
+  model: '按模型',
+}
+
+// 图表聚合行（queue 模式有 queue，model 模式有 model/provider）
+interface DailyUsageChartRow {
+  date: string
+  queue?: string
+  model?: string
+  provider?: string
+  request_count: number
+  prompt_tokens: number
+  completion_tokens: number
+  total_tokens: number
+  cache_tokens: number
+}
+
 export default function UsageTrend() {
   const [provider, setProvider] = useState<string | undefined>()
   const [modelId, setModelId] = useState<number | undefined>()
   const [days, setDays] = useState(30)
   const [metric, setMetric] = useState<Metric>('total_tokens')
+  const [groupBy, setGroupBy] = useState<GroupBy>('queue')
   const [searchNonce, setSearchNonce] = useState(0)
 
   const { data: providers } = useQuery({ queryKey: ['providers'], queryFn: listProviders })
@@ -66,9 +86,15 @@ export default function UsageTrend() {
     queryFn: () => getDailyStats({ provider, model: modelName, days }),
   })
 
-  const { data: byModelRows, isLoading: byModelLoading } = useQuery({
-    queryKey: ['daily-stats-by-model', provider, modelName, days, searchNonce],
-    queryFn: () => getDailyStatsByModel({ provider, model: modelName, days }),
+  // 图表数据：按分组模式选择对应聚合接口
+  const chartQueryKey = groupBy === 'queue' ? 'daily-stats-by-queue' : 'daily-stats-by-model'
+  // 统一 chartRows 类型：按队列返回 queue，按模型返回 model/provider
+  const chartQueryFn = groupBy === 'queue'
+    ? (): Promise<DailyUsageChartRow[]> => getDailyStatsByQueue({ provider, model: modelName, days })
+    : (): Promise<DailyUsageChartRow[]> => getDailyStatsByModel({ provider, model: modelName, days })
+  const { data: chartRows, isLoading: chartLoading } = useQuery({
+    queryKey: [chartQueryKey, provider, modelName, days, searchNonce],
+    queryFn: chartQueryFn,
   })
 
   const handleSearch = () => setSearchNonce(n => n + 1)
@@ -79,7 +105,7 @@ export default function UsageTrend() {
     setSearchNonce(n => n + 1)
   }
 
-  if (isLoading || byModelLoading) {
+  if (isLoading || chartLoading) {
     return <Spin size="large" style={{ display: 'block', marginTop: 100 }} />
   }
 
@@ -99,25 +125,38 @@ export default function UsageTrend() {
     dayList.push(formatDate(d))
   }
 
-  // 提取所有出现过的系列（model+provider），并为每个日期×系列补齐 0 值点，
-  // 使 x 轴始终固定为完整日期序列，图例筛选某个系列后空日期也不会消失
-  const keyInfo = new Map<string, { model: string; provider: string }>()
+  // 提取所有出现过的系列并补齐 0 值点，使 x 轴始终固定为完整日期序列：
+  // 图例筛选某个系列后空日期也不会消失。按分组模式决定系列标识与数据来源。
+  //  - queue 模式：系列 = 队列名（队列是路由目标，一个队列可能对应多个模型）
+  //  - model 模式：系列 = 模型 · 服务商
+  const seriesInfo = new Map<string, { model: string; provider: string }>()
   const byDateKey = new Map<string, Map<string, number>>()
-  for (const r of byModelRows ?? []) {
-    const key = modelKey(r.model || '未知', r.provider)
-    if (!keyInfo.has(key)) keyInfo.set(key, { model: r.model || '未知', provider: r.provider })
-    let m = byDateKey.get(r.date)
-    if (!m) { m = new Map(); byDateKey.set(r.date, m) }
-    m.set(key, r[metric])
+  for (const r of chartRows ?? []) {
+    let key: string
+    let model: string
+    let provider: string
+    if (groupBy === 'queue') {
+      model = r.queue || '未知队列'
+      provider = ''
+      key = model
+    } else {
+      model = r.model || '未知'
+      provider = r.provider || ''
+      key = provider ? `${model} · ${provider}` : model
+    }
+    if (!seriesInfo.has(key)) seriesInfo.set(key, { model, provider })
+    let kMap = byDateKey.get(r.date)
+    if (!kMap) { kMap = new Map(); byDateKey.set(r.date, kMap) }
+    kMap.set(key, r[metric])
   }
-  const allKeys = Array.from(keyInfo.keys())
+  const allKeys = Array.from(seriesInfo.keys())
 
-  const chartData = (byModelRows ?? []).length === 0
+  const chartData = (chartRows ?? []).length === 0
     ? []
     : dayList.flatMap((date) => {
         const keyMap = byDateKey.get(date)
         return allKeys.map((key) => {
-          const info = keyInfo.get(key)!
+          const info = seriesInfo.get(key)!
           return {
             date,
             key,
@@ -270,8 +309,14 @@ export default function UsageTrend() {
       </Row>
 
       <Card title="每日用量趋势" className="aurora-card aurora-chart-card usage-trend-card">
-        <Space style={{ marginBottom: 16 }}>
-          <span style={{ fontSize: 13, color: '#8a7f66' }}>指标：</span>
+        <Space style={{ marginBottom: 16 }} wrap>
+          <span style={{ fontSize: 13, color: '#8a7f66' }}>分组：</span>
+          <Radio.Group value={groupBy} onChange={(e) => setGroupBy(e.target.value)} size="small">
+            {(Object.keys(groupByLabels) as GroupBy[]).map(k => (
+              <Radio.Button key={k} value={k}>{groupByLabels[k]}</Radio.Button>
+            ))}
+          </Radio.Group>
+          <span style={{ fontSize: 13, color: '#8a7f66', marginLeft: 8 }}>指标：</span>
           <Radio.Group value={metric} onChange={(e) => setMetric(e.target.value)} size="small">
             {(Object.keys(metricLabels) as Metric[]).map(k => (
               <Radio.Button key={k} value={k}>{metricLabels[k]}</Radio.Button>

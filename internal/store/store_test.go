@@ -122,3 +122,48 @@ func TestDailyUsageStatsByModel(t *testing.T) {
 	assert.Equal(t, int64(25), rows[1].CompletionTokens)
 	assert.Equal(t, int64(2), rows[1].RequestCount)
 }
+
+func TestDailyUsageStatsByQueue(t *testing.T) {
+	s := newTestStore(t)
+	now := time.Now()
+	// 同一天、同一队列 code-queue：openai gpt-4o 两条 + anthropic claude-3 一条
+	// 队列名取 routed_model；不同队列各归各的
+	s.CreateLog(&RequestLog{RoutedModel: "code-queue", ServedModel: "gpt-4o", ServedProvider: "openai", PromptTokens: 10, CompletionTokens: 20, TotalTokens: 30, CreatedAt: now})
+	s.CreateLog(&RequestLog{RoutedModel: "code-queue", ServedModel: "gpt-4o", ServedProvider: "openai", PromptTokens: 5, CompletionTokens: 5, TotalTokens: 10, CreatedAt: now})
+	s.CreateLog(&RequestLog{RoutedModel: "code-queue", ServedModel: "claude-3", ServedProvider: "anthropic", PromptTokens: 100, CompletionTokens: 200, TotalTokens: 300, CreatedAt: now})
+	// 昨天另一队列 chat-queue 一条
+	s.CreateLog(&RequestLog{RoutedModel: "chat-queue", ServedModel: "deepseek", ServedProvider: "opencode", PromptTokens: 50, CompletionTokens: 50, TotalTokens: 100, CreatedAt: now.Add(-24 * time.Hour)})
+
+	rows, err := s.DailyUsageStatsByQueue("", "", 30)
+	assert.NoError(t, err)
+	assert.Len(t, rows, 2)
+
+	// 同一天、同一队列合并为一行（routed_model 为分组键），date 为纯 YYYY-MM-DD
+	for _, r := range rows {
+		assert.Regexp(t, `^\d{4}-\d{2}-\d{2}$`, r.Date)
+	}
+	// 外层 Order date asc, total_tokens desc：昨天 chat-queue(100) 在前，今天 code-queue(340) 在后
+	assert.Equal(t, "chat-queue", rows[0].Queue)
+	assert.Equal(t, int64(100), rows[0].TotalTokens)
+	assert.Equal(t, int64(1), rows[0].RequestCount)
+	assert.Equal(t, "code-queue", rows[1].Queue)
+	assert.Equal(t, int64(340), rows[1].TotalTokens)
+	assert.Equal(t, int64(3), rows[1].RequestCount)
+	assert.Equal(t, int64(115), rows[1].PromptTokens)
+	assert.Equal(t, int64(225), rows[1].CompletionTokens)
+
+	// provider 过滤：只统计该 provider 服务的日志
+	rows, err = s.DailyUsageStatsByQueue("anthropic", "", 30)
+	assert.NoError(t, err)
+	assert.Len(t, rows, 1)
+	assert.Equal(t, "code-queue", rows[0].Queue)
+	assert.Equal(t, int64(300), rows[0].TotalTokens)
+
+	// model 过滤：按 served_model（fallback routed_model）精确匹配
+	rows, err = s.DailyUsageStatsByQueue("", "gpt-4o", 30)
+	assert.NoError(t, err)
+	assert.Len(t, rows, 1)
+	assert.Equal(t, "code-queue", rows[0].Queue)
+	assert.Equal(t, int64(40), rows[0].TotalTokens)
+	assert.Equal(t, int64(2), rows[0].RequestCount)
+}

@@ -129,6 +129,7 @@ func NewApp(cfg Config, st *store.Store, cryptoKey []byte, gatewayToken, adminTo
 	authAdmin.GET("/stats", app.handleStats)
 	authAdmin.GET("/stats/daily", app.handleDailyStats)
 	authAdmin.GET("/stats/daily/models", app.handleDailyStatsByModel)
+	authAdmin.GET("/stats/daily/queues", app.handleDailyStatsByQueue)
 	return app
 }
 

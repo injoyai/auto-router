@@ -336,3 +336,43 @@ func (s *Store) DailyUsageStatsByModel(provider, model string, days int) ([]Dail
 		Scan(&rows).Error
 	return rows, err
 }
+
+// DailyUsageByQueueRow is one day's aggregated usage for a single model queue
+// (routed_model, i.e. the queue name the client requested).
+type DailyUsageByQueueRow struct {
+	Date             string `json:"date"`
+	Queue            string `json:"queue"`
+	RequestCount     int64  `json:"request_count"`
+	PromptTokens     int64  `json:"prompt_tokens"`
+	CompletionTokens int64  `json:"completion_tokens"`
+	TotalTokens      int64  `json:"total_tokens"`
+	CacheTokens      int64  `json:"cache_tokens"`
+}
+
+// DailyUsageStatsByQueue aggregates daily usage grouped by (date, routed_model),
+// used by the stacked column chart when grouping by model queue. A queue is the
+// routing target (the name the client requested); multiple served models may
+// fall under the same queue, so this shows usage per queue rather than per model.
+func (s *Store) DailyUsageStatsByQueue(provider, model string, days int) ([]DailyUsageByQueueRow, error) {
+	startDate := time.Now().AddDate(0, 0, -days).Format("2006-01-02")
+	inner := s.DB.Table("request_logs").
+		Select(s.dailyDateExpr()+" as date, COALESCE(NULLIF(routed_model, ''), served_model) as queue, prompt_tokens, completion_tokens, total_tokens, cache_tokens").
+		Where("created_at >= ? AND total_tokens > 0", startDate)
+	if provider != "" {
+		inner = inner.Where("served_provider = ?", provider)
+	}
+	if model != "" {
+		if s.DB.Dialector.Name() == "mysql" {
+			inner = inner.Where("BINARY COALESCE(NULLIF(served_model, ''), routed_model) = ?", model)
+		} else {
+			inner = inner.Where("COALESCE(NULLIF(served_model, ''), routed_model) = ?", model)
+		}
+	}
+	var rows []DailyUsageByQueueRow
+	err := s.DB.Table("(?) as t", inner).
+		Select("date, queue, count(*) as request_count, sum(prompt_tokens) as prompt_tokens, sum(completion_tokens) as completion_tokens, sum(total_tokens) as total_tokens, sum(cache_tokens) as cache_tokens").
+		Group("date, queue").
+		Order("date asc, total_tokens desc").
+		Scan(&rows).Error
+	return rows, err
+}

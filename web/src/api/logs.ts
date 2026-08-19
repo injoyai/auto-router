@@ -122,3 +122,18 @@ export async function getDailyStatsByModel(params: DailyStatsParams): Promise<Da
   const { data } = await apiClient.get('/admin/stats/daily/models', { params })
   return data.data
 }
+
+export interface DailyUsageByQueueRow {
+  date: string
+  queue: string
+  request_count: number
+  prompt_tokens: number
+  completion_tokens: number
+  total_tokens: number
+  cache_tokens: number
+}
+
+export async function getDailyStatsByQueue(params: DailyStatsParams): Promise<DailyUsageByQueueRow[]> {
+  const { data } = await apiClient.get('/admin/stats/daily/queues', { params })
+  return data.data
+}

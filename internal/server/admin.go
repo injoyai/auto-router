@@ -542,6 +542,24 @@ func (a *App) handleDailyStatsByModel(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"data": rows})
 }
 
+func (a *App) handleDailyStatsByQueue(c *gin.Context) {
+	provider := c.Query("provider")
+	model := c.Query("model")
+	days := 30
+	if d := c.Query("days"); d != "" {
+		if v, err := strconv.Atoi(d); err == nil && v > 0 && v <= 365 {
+			days = v
+		}
+	}
+	rows, err := a.Store.DailyUsageStatsByQueue(provider, model, days)
+	if err != nil {
+		log.Printf("[WARN] stats: daily usage by-queue aggregation failed: %v", err)
+		c.JSON(http.StatusOK, gin.H{"data": []store.DailyUsageByQueueRow{}})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": rows})
+}
+
 // ---- Model Groups (queues) ----
 
 type groupInput struct {
