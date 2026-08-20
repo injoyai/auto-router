@@ -20,7 +20,7 @@
 ## 项目结构
 
 ```
-cmd/main.go                 # 入口
+cmd/server/main.go         # 入口
 internal/
   config/                    # 配置加载(环境变量 > YAML > 默认值)
   jwt/                       # JWT 认证
