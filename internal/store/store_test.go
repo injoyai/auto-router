@@ -35,10 +35,11 @@ func TestOpenAutoMigrates(t *testing.T) {
 
 func TestTokenAggregations(t *testing.T) {
 	s := newTestStore(t)
-	// 两条 gpt-4o,一条 claude-3
+	// 两条 gpt-4o,一条 claude-3,一条测试模型日志(不应计入统计)
 	s.CreateLog(&RequestLog{RoutedModel: "gpt-4o", ServedModel: "gpt-4o", ServedProvider: "openai", PromptTokens: 10, CompletionTokens: 20, TotalTokens: 30})
 	s.CreateLog(&RequestLog{RoutedModel: "gpt-4o", ServedModel: "gpt-4o", ServedProvider: "openai", PromptTokens: 5, CompletionTokens: 5, TotalTokens: 10})
 	s.CreateLog(&RequestLog{RoutedModel: "claude-3", ServedModel: "claude-3", ServedProvider: "anthropic", PromptTokens: 100, CompletionTokens: 200, TotalTokens: 300})
+	s.CreateLog(&RequestLog{RoutedModel: "gpt-test", ServedModel: "gpt-test", ServedProvider: "openai", RouteReason: "test", PromptTokens: 100, CompletionTokens: 100, TotalTokens: 200})
 
 	byModel, err := s.TokenStatsByModel()
 	assert.NoError(t, err)
@@ -67,6 +68,8 @@ func TestDailyUsageStats(t *testing.T) {
 	s.CreateLog(&RequestLog{RoutedModel: "gpt-4o", ServedModel: "gpt-4o", ServedProvider: "openai", PromptTokens: 5, CompletionTokens: 5, TotalTokens: 10, CreatedAt: now})
 	// 昨天 anthropic claude-3 一条
 	s.CreateLog(&RequestLog{RoutedModel: "claude-3", ServedModel: "claude-3", ServedProvider: "anthropic", PromptTokens: 100, CompletionTokens: 200, TotalTokens: 300, CreatedAt: now.Add(-24 * time.Hour)})
+	// 今天测试模型一条(不应计入统计)
+	s.CreateLog(&RequestLog{RoutedModel: "gpt-test", ServedModel: "gpt-test", ServedProvider: "openai", RouteReason: "test", PromptTokens: 100, CompletionTokens: 100, TotalTokens: 200, CreatedAt: now})
 
 	rows, err := s.DailyUsageStats("", "", 30)
 	assert.NoError(t, err)
@@ -100,6 +103,8 @@ func TestDailyUsageStatsByModel(t *testing.T) {
 	s.CreateLog(&RequestLog{RoutedModel: "gpt-4o", ServedModel: "gpt-4o", ServedProvider: "openai", PromptTokens: 10, CompletionTokens: 20, TotalTokens: 30, CreatedAt: now})
 	s.CreateLog(&RequestLog{RoutedModel: "gpt-4o", ServedModel: "gpt-4o", ServedProvider: "openai", PromptTokens: 5, CompletionTokens: 5, TotalTokens: 10, CreatedAt: now})
 	s.CreateLog(&RequestLog{RoutedModel: "claude-3", ServedModel: "claude-3", ServedProvider: "anthropic", PromptTokens: 100, CompletionTokens: 200, TotalTokens: 300, CreatedAt: now})
+	// 同一天测试模型一条(不应计入统计)
+	s.CreateLog(&RequestLog{RoutedModel: "gpt-test", ServedModel: "gpt-test", ServedProvider: "openai", RouteReason: "test", PromptTokens: 100, CompletionTokens: 100, TotalTokens: 200, CreatedAt: now})
 
 	rows, err := s.DailyUsageStatsByModel("", "", 30)
 	assert.NoError(t, err)
@@ -133,6 +138,8 @@ func TestDailyUsageStatsByQueue(t *testing.T) {
 	s.CreateLog(&RequestLog{RoutedModel: "code-queue", ServedModel: "claude-3", ServedProvider: "anthropic", PromptTokens: 100, CompletionTokens: 200, TotalTokens: 300, CreatedAt: now})
 	// 昨天另一队列 chat-queue 一条
 	s.CreateLog(&RequestLog{RoutedModel: "chat-queue", ServedModel: "deepseek", ServedProvider: "opencode", PromptTokens: 50, CompletionTokens: 50, TotalTokens: 100, CreatedAt: now.Add(-24 * time.Hour)})
+	// 今天测试队列一条(不应计入统计)
+	s.CreateLog(&RequestLog{RoutedModel: "test-queue", ServedModel: "gpt-test", ServedProvider: "openai", RouteReason: "test", PromptTokens: 100, CompletionTokens: 100, TotalTokens: 200, CreatedAt: now})
 
 	rows, err := s.DailyUsageStatsByQueue("", "", 30)
 	assert.NoError(t, err)

@@ -197,7 +197,7 @@ type TokenStatRow struct {
 // TokenStatsTotal returns the sum of total_tokens across all logs.
 func (s *Store) TokenStatsTotal() (int64, error) {
 	var total int64
-	err := s.DB.Model(&RequestLog{}).Where("total_tokens > 0").Select("COALESCE(SUM(total_tokens), 0)").Scan(&total).Error
+	err := s.DB.Model(&RequestLog{}).Where("total_tokens > 0").Where("COALESCE(route_reason, '') != 'test'").Select("COALESCE(SUM(total_tokens), 0)").Scan(&total).Error
 	return total, err
 }
 
@@ -206,9 +206,10 @@ func (s *Store) TokenStatsTotal() (int64, error) {
 // multiple providers (e.g. "GLM-5.2" under both 智谱 and opencode).
 // served_provider is set at request time (accurate); for old logs without it,
 // falls back to a correlated subquery resolving provider by model name.
+// Test-model logs (route_reason='test') are excluded.
 func (s *Store) TokenStatsByModel() ([]TokenStatRow, error) {
 	var rows []TokenStatRow
-	err := s.DB.Table("(SELECT COALESCE(NULLIF(served_model, ''), routed_model) as model, COALESCE(NULLIF(served_provider, ''), (SELECT providers.name FROM models JOIN providers ON models.provider_id = providers.id WHERE models.name = COALESCE(NULLIF(served_model, ''), routed_model) LIMIT 1)) as provider, prompt_tokens, completion_tokens, total_tokens, cache_tokens FROM request_logs WHERE COALESCE(NULLIF(served_model, ''), routed_model) != '' AND total_tokens > 0) as t").
+	err := s.DB.Table("(SELECT COALESCE(NULLIF(served_model, ''), routed_model) as model, COALESCE(NULLIF(served_provider, ''), (SELECT providers.name FROM models JOIN providers ON models.provider_id = providers.id WHERE models.name = COALESCE(NULLIF(served_model, ''), routed_model) LIMIT 1)) as provider, prompt_tokens, completion_tokens, total_tokens, cache_tokens FROM request_logs WHERE COALESCE(NULLIF(served_model, ''), routed_model) != '' AND total_tokens > 0 AND COALESCE(route_reason, '') != 'test') as t").
 		Select(`model,
 			provider,
 			count(*) as count,
@@ -229,9 +230,10 @@ func (s *Store) TokenStatsByModel() ([]TokenStatRow, error) {
 // for old logs without served_provider, falls back to resolving via
 // models+providers JOIN subquery. No JOIN in the outer query avoids
 // double-counting when the same model name exists under multiple providers.
+// Test-model logs (route_reason='test') are excluded.
 func (s *Store) TokenStatsByProvider() ([]TokenStatRow, error) {
 	var rows []TokenStatRow
-	err := s.DB.Table("(SELECT COALESCE(NULLIF(served_provider, ''), (SELECT providers.name FROM models JOIN providers ON models.provider_id = providers.id WHERE models.name = COALESCE(NULLIF(served_model, ''), routed_model) LIMIT 1)) as provider, prompt_tokens, completion_tokens, total_tokens, cache_tokens FROM request_logs WHERE COALESCE(NULLIF(served_model, ''), routed_model) != '' AND total_tokens > 0) as t").
+	err := s.DB.Table("(SELECT COALESCE(NULLIF(served_provider, ''), (SELECT providers.name FROM models JOIN providers ON models.provider_id = providers.id WHERE models.name = COALESCE(NULLIF(served_model, ''), routed_model) LIMIT 1)) as provider, prompt_tokens, completion_tokens, total_tokens, cache_tokens FROM request_logs WHERE COALESCE(NULLIF(served_model, ''), routed_model) != '' AND total_tokens > 0 AND COALESCE(route_reason, '') != 'test') as t").
 		Select(`provider,
 			count(*) as count,
 			sum(prompt_tokens) as prompt_tokens,
@@ -277,7 +279,7 @@ func (s *Store) DailyUsageStats(provider, model string, days int) ([]DailyUsageR
 	startDate := time.Now().AddDate(0, 0, -days).Format("2006-01-02")
 	inner := s.DB.Table("request_logs").
 		Select(s.dailyDateExpr() + " as date, COALESCE(NULLIF(served_model, ''), routed_model) as model, served_provider as provider, prompt_tokens, completion_tokens, total_tokens, cache_tokens").
-		Where("created_at >= ? AND total_tokens > 0", startDate)
+		Where("created_at >= ? AND total_tokens > 0 AND COALESCE(route_reason, '') != 'test'", startDate)
 	if provider != "" {
 		inner = inner.Where("served_provider = ?", provider)
 	}
@@ -317,7 +319,7 @@ func (s *Store) DailyUsageStatsByModel(provider, model string, days int) ([]Dail
 	startDate := time.Now().AddDate(0, 0, -days).Format("2006-01-02")
 	inner := s.DB.Table("request_logs").
 		Select(s.dailyDateExpr() + " as date, COALESCE(NULLIF(served_model, ''), routed_model) as model, served_provider as provider, prompt_tokens, completion_tokens, total_tokens, cache_tokens").
-		Where("created_at >= ? AND total_tokens > 0", startDate)
+		Where("created_at >= ? AND total_tokens > 0 AND COALESCE(route_reason, '') != 'test'", startDate)
 	if provider != "" {
 		inner = inner.Where("served_provider = ?", provider)
 	}
@@ -357,7 +359,7 @@ func (s *Store) DailyUsageStatsByQueue(provider, model string, days int) ([]Dail
 	startDate := time.Now().AddDate(0, 0, -days).Format("2006-01-02")
 	inner := s.DB.Table("request_logs").
 		Select(s.dailyDateExpr()+" as date, COALESCE(NULLIF(routed_model, ''), served_model) as queue, prompt_tokens, completion_tokens, total_tokens, cache_tokens").
-		Where("created_at >= ? AND total_tokens > 0", startDate)
+		Where("created_at >= ? AND total_tokens > 0 AND COALESCE(route_reason, '') != 'test'", startDate)
 	if provider != "" {
 		inner = inner.Where("served_provider = ?", provider)
 	}

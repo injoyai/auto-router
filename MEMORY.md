@@ -151,6 +151,7 @@ web/
 - **用量趋势 API**: `GET /admin/stats/daily?provider=&model=&days=30` 返回按天聚合的 token 用量（`DailyUsageRow` 含 date/request_count/prompt_tokens/completion_tokens/total_tokens/cache_tokens）。store 方法 `DailyUsageStats(provider, model, days)` 先物化子查询（`DATE(created_at)` + 解析 `served_model`/`served_provider` + 过滤），再在 `(?) as t` 外层做 `count(*)` 与 `sum(...)` 聚合，支持 `served_provider` 和模型名过滤
 - **用量趋势按模型 API**: `GET /admin/stats/daily/models?provider=&model=&days=30` 返回按 (date, model, provider) 聚合的数据（`DailyUsageByModelRow` 在 `DailyUsageRow` 基础上多 `model` 和 `provider` 字段），供堆叠柱状图使用（tooltip 需显示供应商，同名模型可存在于多供应商下）。store 方法 `DailyUsageStatsByModel(provider, model, days)` 与 `DailyUsageStats` 共享子查询构造，仅外层 `Group("date, model, provider")` 不同
 - **用量趋势按队列 API**: `GET /admin/stats/daily/queues?provider=&model=&days=30` 返回按 (date, routed_model) 聚合的数据（`DailyUsageByQueueRow` 含 `queue` 字段，即队列名）。store 方法 `DailyUsageStatsByQueue(provider, model, days)`：内层 `COALESCE(NULLIF(routed_model, ''), served_model) as queue`（队列为空时回退到执行模型），外层 `Group("date, queue")`。供堆叠柱状图「按队列」分组模式使用（队列是路由目标，一个队列可能对应多个模型，展示每个队列的用量而非每个模型）
+- **测试模型日志不计入统计**: 「测试模型」请求（`GET /admin/models/:id/test`，见 handleTestModel）会写入一条 `SessionID="test-model-{id}"`、`RouteReason="test"` 的日志（`RoutedModel=模型名`，即队列名=自身，会污染按队列与按模型的两种图表分组）。所有用量统计查询（`TokenStatsTotal`/`TokenStatsByModel`/`TokenStatsByProvider` + 三个 `DailyUsage*` 查询）内层统一加 `COALESCE(route_reason, '') != 'test'` 过滤排除；`handleStats` 的 `total`/`by_reason` 全量计数与日志列表仍保留测试日志（测试记录本身可查）
 
 ## 前端规范
 
